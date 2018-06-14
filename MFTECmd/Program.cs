@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -21,8 +22,6 @@ namespace MFTECmd
     {
         private static Logger _logger;
 
-        private static readonly string _preciseTimeFormat = "yyyy-MM-dd HH:mm:ss.fffffff";
-
         private static FluentCommandLineParser<ApplicationArguments> _fluentCommandLineParser;
         private static Mft _mft;
 
@@ -41,58 +40,36 @@ namespace MFTECmd
                 .As('f')
                 .WithDescription("File to process. Either this or -d is required");
 
-//            _fluentCommandLineParser.Setup(arg => arg.Directory)
-//                .As('d')
-//                .WithDescription("Directory to recursively process. Either this or -f is required");
-
             _fluentCommandLineParser.Setup(arg => arg.CsvDirectory)
                 .As("csv")
                 .WithDescription(
-                    "Directory to save CSV ormatted results to. Be sure to include the full path in double quotes. Required");
+                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. Required unless --de is specified");
 
-// 
-//            _fluentCommandLineParser.Setup(arg => arg.JsonDirectory)
-//                .As("json")
-//                .WithDescription(
-//                    "Directory to save json representation to. Use --pretty for a more human readable layout");
-
-//            _fluentCommandLineParser.Setup(arg => arg.JsonPretty)
-//                .As("pretty")
-//                .WithDescription(
-//                    "When exporting to json, use a more human readable layout\r\n").SetDefault(false);
-
-            _fluentCommandLineParser.Setup(arg => arg.Quiet)
-                .As('q')
+            _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
+                .As("de")
                 .WithDescription(
-                    "Only show the filename being processed vs all output. Useful to speed up exporting to json and/or csv\r\n")
-                .SetDefault(false);
+                    "Dump full details for the entry/sequence number provided. Format is 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5\r\n")
+                .SetDefault(string.Empty);
 
             _fluentCommandLineParser.Setup(arg => arg.DateTimeFormat)
                 .As("dt")
                 .WithDescription(
-                    "The custom date/time format to use when displaying time stamps. Default is: yyyy-MM-dd HH:mm:ss")
+                    "The custom date/time format to use when displaying time stamps. Default is: yyyy-MM-dd HH:mm:ss.fffffff")
                 .SetDefault("yyyy-MM-dd HH:mm:ss");
-
-            _fluentCommandLineParser.Setup(arg => arg.PreciseTimestamps)
-                .As("mp")
-                .WithDescription(
-                    "Display higher precision for time stamps. Default is false").SetDefault(false);
 
             _fluentCommandLineParser.Setup(arg => arg.IncludeShortNames)
                 .As("sn")
                 .WithDescription(
                     "Include DOS file name types. Default is false").SetDefault(false);
 
-
-
             var header =
                 $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
                 "\r\n\r\nAuthor: Eric Zimmerman (saericzimmerman@gmail.com)" +
                 "\r\nhttps://github.com/EricZimmerman/MFTECmd";
 
-
             var footer = @"Examples: MFTECmd.exe -f ""C:\Temp\SomeMFT""" + "\r\n\t " +
-                         @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out"" -q" + "\r\n\t " +
+                         @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
+                         @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
                          "\r\n\t" +
                          "  Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes\r\n";
 
@@ -132,22 +109,18 @@ namespace MFTECmd
                 return;
             }
 
-            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty())
+            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
+                _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty())
             {
                 _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
-                _logger.Warn("--csv is required. Exiting");
+                _logger.Warn("--csv or --de is required. Exiting");
                 return;
             }
 
             _logger.Info(header);
             _logger.Info("");
             _logger.Info($"Command line: {string.Join(" ", Environment.GetCommandLineArgs().Skip(1))}\r\n");
-
-            if (_fluentCommandLineParser.Object.PreciseTimestamps)
-            {
-                _fluentCommandLineParser.Object.DateTimeFormat = _preciseTimeFormat;
-            }
 
             if (IsAdministrator() == false)
             {
@@ -161,174 +134,233 @@ namespace MFTECmd
 
             sw.Stop();
 
-            if (_fluentCommandLineParser.Object.Quiet)
-            {
-                _logger.Info("");
-            }
-
             _logger.Info(
                 $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
 
-            if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
             {
-                _logger.Warn($"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
-                Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
-            }
-
-            var outName = $"{DateTimeOffset.Now.ToString("yyyyMMddHHmmss")}_MFTECmd_Output.csv";
-            var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
-
-
-            _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
-
-            try
-            {
-                using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8))
+                if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
                 {
-                    var csv = new CsvWriter(sw1);
+                    _logger.Warn(
+                        $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                    Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                }
 
-                    var foo = csv.Configuration.AutoMap<MFTRecordOut>();
+                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.csv";
+                var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
 
-                    foo.Map(t => t.EntryNumber).Index(0);
-                    foo.Map(t => t.SequenceNumber).Index(1);
-                    foo.Map(t => t.InUse).Index(2);
-                    foo.Map(t => t.ParentEntryNumber).Index(3);
-                    foo.Map(t => t.ParentSequenceNumber).Index(4);
-                    foo.Map(t => t.ParentPath).Index(5);
-                    foo.Map(t => t.FileName).Index(6);
-                    foo.Map(t => t.Extension).Index(7);
-                    foo.Map(t => t.FileSize).Index(8);
-                    foo.Map(t => t.ReferenceCount).Index(9);
-                    foo.Map(t => t.ReparseTarget).Index(10);
+                _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
 
-                    foo.Map(t => t.IsDirectory).Index(11);
-                    foo.Map(t => t.HasAds).Index(12);
-                    foo.Map(t => t.IsAds).Index(13);
-                    foo.Map(t => t.Timestomped).Index(14);
-                    foo.Map(t => t.uSecZeros).Index(15);
-                    foo.Map(t => t.Copied).Index(16);
-                    foo.Map(t => t.SiFlags).Index(17);
-                    foo.Map(t => t.NameType).Index(18);
-                    
-                    foo.Map(t => t.Created0x10).ConvertUsing(t =>
-                        $"=\"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(19);
-                    foo.Map(t => t.Created0x30).ConvertUsing(t =>
-                        $"=\"{t.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(20);
-
-                    foo.Map(t => t.LastModified0x10).ConvertUsing(t =>
-                        $"=\"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(21);
-                    foo.Map(t => t.LastModified0x30).ConvertUsing(t =>
-                        $"=\"{t.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(22);
-
-                    foo.Map(t => t.LastRecordChange0x10).ConvertUsing(t =>
-                        $"=\"{t.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(23);
-                    foo.Map(t => t.LastRecordChange0x30).ConvertUsing(t =>
-                        $"=\"{t.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(24);
-                   
-                    foo.Map(t => t.LastAccess0x10).ConvertUsing(t =>
-                        $"=\"{t.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(25);
-
-                    foo.Map(t => t.LastAccess0x30).ConvertUsing(t =>
-                        $"=\"{t.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(26);
-
-                    foo.Map(t => t.UpdateSequenceNumber).Index(27);
-                    foo.Map(t => t.LogfileSequenceNumber).Index(28);
-                    foo.Map(t => t.SecurityId).Index(29);
-                    
-                    foo.Map(t => t.ObjectIdFileDroid).Index(30);
-                    foo.Map(t => t.LoggedUtilStream).Index(31);
-                    foo.Map(t => t.ZoneIdContents).Index(32);
-
-
-                    csv.Configuration.RegisterClassMap(foo);
-
-                    csv.WriteHeader<MFTRecordOut>();
-                    csv.NextRecord();
-                    
-                    foreach (var fr in _mft.FileRecords)
+                try
+                {
+                    using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8))
                     {
-                        foreach (var attribute in fr.Value.Attributes.Where(t =>
-                            t.AttributeType == AttributeType.FileName))
+                        var csv = new CsvWriter(sw1);
+
+                        var foo = csv.Configuration.AutoMap<MFTRecordOut>();
+
+                        foo.Map(t => t.EntryNumber).Index(0);
+                        foo.Map(t => t.SequenceNumber).Index(1);
+                        foo.Map(t => t.InUse).Index(2);
+                        foo.Map(t => t.ParentEntryNumber).Index(3);
+                        foo.Map(t => t.ParentSequenceNumber).Index(4);
+                        foo.Map(t => t.ParentPath).Index(5);
+                        foo.Map(t => t.FileName).Index(6);
+                        foo.Map(t => t.Extension).Index(7);
+                        foo.Map(t => t.FileSize).Index(8);
+                        foo.Map(t => t.ReferenceCount).Index(9);
+                        foo.Map(t => t.ReparseTarget).Index(10);
+
+                        foo.Map(t => t.IsDirectory).Index(11);
+                        foo.Map(t => t.HasAds).Index(12);
+                        foo.Map(t => t.IsAds).Index(13);
+                        foo.Map(t => t.Timestomped).Index(14);
+                        foo.Map(t => t.uSecZeros).Index(15);
+                        foo.Map(t => t.Copied).Index(16);
+                        foo.Map(t => t.SiFlags).Index(17);
+                        foo.Map(t => t.NameType).Index(18);
+
+                        foo.Map(t => t.Created0x10).ConvertUsing(t =>
+                            $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
+                        foo.Map(t => t.Created0x30).ConvertUsing(t =>
+                            $"{t.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(20);
+
+                        foo.Map(t => t.LastModified0x10).ConvertUsing(t =>
+                                $"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                            .Index(21);
+                        foo.Map(t => t.LastModified0x30).ConvertUsing(t =>
+                                $"{t.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                            .Index(22);
+
+                        foo.Map(t => t.LastRecordChange0x10).ConvertUsing(t =>
+                                $"{t.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                            .Index(23);
+                        foo.Map(t => t.LastRecordChange0x30).ConvertUsing(t =>
+                                $"{t.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                            .Index(24);
+
+                        foo.Map(t => t.LastAccess0x10).ConvertUsing(t =>
+                            $"{t.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(25);
+
+                        foo.Map(t => t.LastAccess0x30).ConvertUsing(t =>
+                            $"{t.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(26);
+
+                        foo.Map(t => t.UpdateSequenceNumber).Index(27);
+                        foo.Map(t => t.LogfileSequenceNumber).Index(28);
+                        foo.Map(t => t.SecurityId).Index(29);
+
+                        foo.Map(t => t.ObjectIdFileDroid).Index(30);
+                        foo.Map(t => t.LoggedUtilStream).Index(31);
+                        foo.Map(t => t.ZoneIdContents).Index(32);
+
+                        csv.Configuration.RegisterClassMap(foo);
+
+                        csv.WriteHeader<MFTRecordOut>();
+                        csv.NextRecord();
+
+                        foreach (var fr in _mft.FileRecords)
                         {
-                            var fn = (FileName) attribute;
-                            if (_fluentCommandLineParser.Object.IncludeShortNames == false && fn.FileInfo.NameType == NameTypes.Dos)
+                            foreach (var attribute in fr.Value.Attributes.Where(t =>
+                                t.AttributeType == AttributeType.FileName))
                             {
-                                continue;
-                            }
+                                var fn = (FileName) attribute;
+                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
+                                    fn.FileInfo.NameType == NameTypes.Dos)
+                                {
+                                    continue;
+                                }
 
-                            var mftr = GetCsvData(fr.Value, fn,null);
+                                var mftr = GetCsvData(fr.Value, fn, null);
 
-                            var ads = fr.Value.GetAlternateDataStreams();
+                                var ads = fr.Value.GetAlternateDataStreams();
 
-                            mftr.HasAds = ads.Any();
+                                mftr.HasAds = ads.Any();
 
-                            csv.WriteRecord(mftr);
-                            csv.NextRecord();
-                            
-                            foreach (var adsInfo in ads)
-                            {
-                                var adsRecord = GetCsvData(fr.Value, fn,adsInfo);
-                                adsRecord.IsAds = true;
-                                csv.WriteRecord(adsRecord);
+                                csv.WriteRecord(mftr);
                                 csv.NextRecord();
+
+                                foreach (var adsInfo in ads)
+                                {
+                                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
+                                    adsRecord.IsAds = true;
+                                    csv.WriteRecord(adsRecord);
+                                    csv.NextRecord();
+                                }
                             }
-
                         }
-                    }
 
-                    foreach (var fr in _mft.FreeFileRecords)
-                    {
-                        foreach (var attribute in fr.Value.Attributes.Where(t =>
-                            t.AttributeType == AttributeType.FileName))
+                        foreach (var fr in _mft.FreeFileRecords)
                         {
-                            var fn = (FileName) attribute;
-                            if (_fluentCommandLineParser.Object.IncludeShortNames == false && fn.FileInfo.NameType == NameTypes.Dos)
+                            foreach (var attribute in fr.Value.Attributes.Where(t =>
+                                t.AttributeType == AttributeType.FileName))
                             {
-                                continue;
-                            }
+                                var fn = (FileName) attribute;
+                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
+                                    fn.FileInfo.NameType == NameTypes.Dos)
+                                {
+                                    continue;
+                                }
 
-                            var mftrD = GetCsvData(fr.Value, fn,null);
+                                var mftrD = GetCsvData(fr.Value, fn, null);
 
-                            var ads = fr.Value.GetAlternateDataStreams();
+                                var ads = fr.Value.GetAlternateDataStreams();
 
-                            mftrD.HasAds = ads.Any();
+                                mftrD.HasAds = ads.Any();
 
-                            csv.WriteRecord(mftrD);
-                            csv.NextRecord();
-
-                            foreach (var adsInfo in ads)
-                            {
-                                var adsRecord = GetCsvData(fr.Value, fn,adsInfo);
-                                adsRecord.IsAds = true;
-                                csv.WriteRecord(adsRecord);
+                                csv.WriteRecord(mftrD);
                                 csv.NextRecord();
+
+                                foreach (var adsInfo in ads)
+                                {
+                                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
+                                    adsRecord.IsAds = true;
+                                    csv.WriteRecord(adsRecord);
+                                    csv.NextRecord();
+                                }
                             }
-
                         }
-                    }
 
-                    sw1.Flush();
+                        sw1.Flush();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(
+                        $"\r\nError exporting data. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {ex.Message}");
                 }
             }
-            catch (Exception ex)
+
+
+            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() == false)
             {
-                _logger.Error(
-                    $"\r\nError exporting data. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {ex.Message}");
+                _logger.Info("");
+
+                FileRecord fr = null;
+
+                var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
+
+                var entryOk = false;
+                var seqOk = false;
+                var entry = -1;
+                var seq = -1;
+
+                if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                {
+                    var seg0 = segs[0].Replace("0x", "");
+                    var seg1 = segs[1].Replace("0x", "");
+
+                    entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
+                    seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
+                }
+                else
+                {
+                    entryOk = int.TryParse(segs[0], out entry);
+                    seqOk = int.TryParse(segs[1], out seq);
+                }
+
+                if (entryOk == false || seqOk == false)
+                {
+                    _logger.Warn(
+                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
+                    return;
+                }
+
+                var key = $"{entry:X8}-{seq:X8}";
+
+                if (_mft.FileRecords.ContainsKey(key))
+                {
+                    fr = _mft.FileRecords[key];
+                }
+                else if (_mft.FreeFileRecords.ContainsKey(key))
+                {
+                    fr = _mft.FreeFileRecords[key];
+                }
+
+                if (fr == null)
+                {
+                    _logger.Warn(
+                        $"Could not find file record with entry/seq '{_fluentCommandLineParser.Object.DumpEntry}'. Exiting");
+                    return;
+                }
+
+                _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
+
+                _logger.Info(fr);
             }
         }
 
-        public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn,AdsInfo adsinfo)
+        public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo)
         {
             var mftr = new MFTRecordOut
             {
                 EntryNumber = fr.EntryNumber,
                 FileName = fn.FileInfo.FileName,
-                InUse = true,
+                InUse = fr.IsDeleted() == false,
                 ParentPath = _mft.GetFullParentPath(fn.FileInfo.ParentMftRecord.GetKey()),
                 SequenceNumber = fr.SequenceNumber,
                 IsDirectory = fr.IsDirectory(),
-                ParentEntryNumber =  fn.FileInfo.ParentMftRecord.MftEntryNumber,
-                ParentSequenceNumber =  fn.FileInfo.ParentMftRecord.MftSequenceNumber,
+                ParentEntryNumber = fn.FileInfo.ParentMftRecord.MftEntryNumber,
+                ParentSequenceNumber = fn.FileInfo.ParentMftRecord.MftSequenceNumber,
                 NameType = fn.FileInfo.NameType
             };
 
@@ -341,7 +373,7 @@ namespace MFTECmd
             {
                 mftr.FileName = $"{mftr.FileName}:{adsinfo.Name}";
                 mftr.FileSize = adsinfo.Size;
-                
+
                 try
                 {
                     mftr.Extension = Path.GetExtension(adsinfo.Name);
@@ -350,7 +382,7 @@ namespace MFTECmd
                 {
                     //sometimes bad chars show up
                 }
-                
+
                 if (adsinfo.Name == "Zone.Identifier")
                 {
                     if (adsinfo.ResidentData != null)
@@ -382,13 +414,13 @@ namespace MFTECmd
 
             if (lus != null)
             {
-                mftr.LoggedUtilStream= lus.Name;
+                mftr.LoggedUtilStream = lus.Name;
             }
 
             var rp = fr.GetReparsePoint();
             if (rp != null)
             {
-                mftr.ReparseTarget = rp.PrintName;
+                mftr.ReparseTarget = rp.SubstituteName.Replace(@"\??\", "");
             }
 
             var si = (StandardInfo) fr.Attributes.SingleOrDefault(t =>
@@ -429,13 +461,14 @@ namespace MFTECmd
 
                 mftr.SiFlags = si.Flags;
 
-                if ((mftr.Created0x30.HasValue && mftr.Created0x10?.UtcTicks < mftr.Created0x30.Value.UtcTicks) || (mftr.LastModified0x30.HasValue && mftr.LastModified0x10?.UtcTicks < mftr.LastModified0x30.Value.UtcTicks))
+                if (mftr.Created0x30.HasValue && mftr.Created0x10?.UtcTicks < mftr.Created0x30.Value.UtcTicks ||
+                    mftr.LastModified0x30.HasValue &&
+                    mftr.LastModified0x10?.UtcTicks < mftr.LastModified0x30.Value.UtcTicks)
                 {
                     mftr.Timestomped = true;
                 }
 
-                if (mftr.Created0x10?.Millisecond == 0 || mftr.LastModified0x10?.Millisecond == 0||
-                 
+                if (mftr.Created0x10?.Millisecond == 0 || mftr.LastModified0x10?.Millisecond == 0 ||
                     mftr.LastAccess0x10?.Millisecond == 0)
                 {
                     mftr.uSecZeros = true;
@@ -449,7 +482,6 @@ namespace MFTECmd
                 mftr.LastRecordChange0x10 = fn.FileInfo.RecordModifiedOn;
                 mftr.LastAccess0x10 = fn.FileInfo.LastAccessedOn;
             }
-
 
             return mftr;
         }
@@ -484,17 +516,9 @@ namespace MFTECmd
     internal class ApplicationArguments
     {
         public string File { get; set; }
-        public string Directory { get; set; }
-
-        // public string JsonDirectory { get; set; }
-        public bool JsonPretty { get; set; }
         public string CsvDirectory { get; set; }
-
         public string DateTimeFormat { get; set; }
-
-        public bool PreciseTimestamps { get; set; }
-
-        public bool Quiet { get; set; }
         public bool IncludeShortNames { get; set; }
+        public string DumpEntry { get; set; }
     }
 }

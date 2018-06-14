@@ -1,20 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
-using MFT;
 using MFT.Attributes;
 
 namespace MFTECmd
 {
-   public class MFTRecordOut
+    public class MFTRecordOut
     {
-     
         public uint EntryNumber { get; set; }
         public ushort SequenceNumber { get; set; }
-
 
         public uint ParentEntryNumber { get; set; }
         public short? ParentSequenceNumber { get; set; }
@@ -41,7 +33,7 @@ namespace MFTECmd
         public DateTimeOffset? LastRecordChange0x30 { get; set; }
 
         public DateTimeOffset? LastAccess0x10 { get; set; }
-      
+
         public DateTimeOffset? LastAccess0x30 { get; set; }
 
         public long UpdateSequenceNumber { get; set; }
@@ -60,6 +52,4 @@ namespace MFTECmd
         public bool uSecZeros { get; set; }
         public bool Copied { get; set; }
     }
-
-    
 }
