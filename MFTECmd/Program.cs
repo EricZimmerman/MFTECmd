@@ -159,10 +159,7 @@ namespace MFTECmd
 
             _mft = MftFile.Load(_fluentCommandLineParser.Object.File);
 
-            //do work here
-
             sw.Stop();
-
 
             if (_fluentCommandLineParser.Object.Quiet)
             {
@@ -209,45 +206,45 @@ namespace MFTECmd
                     foo.Map(t => t.IsAds).Index(13);
                     foo.Map(t => t.Timestomped).Index(14);
                     foo.Map(t => t.uSecZeros).Index(15);
-                    foo.Map(t => t.SiFlags).Index(16);
-                    foo.Map(t => t.NameType).Index(17);
+                    foo.Map(t => t.Copied).Index(16);
+                    foo.Map(t => t.SiFlags).Index(17);
+                    foo.Map(t => t.NameType).Index(18);
                     
                     foo.Map(t => t.Created0x10).ConvertUsing(t =>
-                        $"=\"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(18);
+                        $"=\"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(19);
                     foo.Map(t => t.Created0x30).ConvertUsing(t =>
-                        $"=\"{t.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(19);
+                        $"=\"{t.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(20);
 
                     foo.Map(t => t.LastModified0x10).ConvertUsing(t =>
-                        $"=\"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(20);
+                        $"=\"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(21);
                     foo.Map(t => t.LastModified0x30).ConvertUsing(t =>
-                        $"=\"{t.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(21);
+                        $"=\"{t.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(22);
 
                     foo.Map(t => t.LastRecordChange0x10).ConvertUsing(t =>
-                        $"=\"{t.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(22);
+                        $"=\"{t.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(23);
                     foo.Map(t => t.LastRecordChange0x30).ConvertUsing(t =>
-                        $"=\"{t.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(23);
+                        $"=\"{t.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(24);
                    
                     foo.Map(t => t.LastAccess0x10).ConvertUsing(t =>
-                        $"=\"{t.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(24);
+                        $"=\"{t.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(25);
 
                     foo.Map(t => t.LastAccess0x30).ConvertUsing(t =>
-                        $"=\"{t.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(25);
+                        $"=\"{t.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}\"").Index(26);
 
-                    foo.Map(t => t.UpdateSequenceNumber).Index(26);
-                    foo.Map(t => t.LogfileSequenceNumber).Index(27);
-                    foo.Map(t => t.SecurityId).Index(28);
+                    foo.Map(t => t.UpdateSequenceNumber).Index(27);
+                    foo.Map(t => t.LogfileSequenceNumber).Index(28);
+                    foo.Map(t => t.SecurityId).Index(29);
                     
-                    foo.Map(t => t.ObjectIdFileDroid).Index(29);
-                    foo.Map(t => t.LoggedUtilStream).Index(30);
-                    foo.Map(t => t.ZoneIdContents).Index(31);
+                    foo.Map(t => t.ObjectIdFileDroid).Index(30);
+                    foo.Map(t => t.LoggedUtilStream).Index(31);
+                    foo.Map(t => t.ZoneIdContents).Index(32);
 
 
                     csv.Configuration.RegisterClassMap(foo);
 
                     csv.WriteHeader<MFTRecordOut>();
                     csv.NextRecord();
-
-
+                    
                     foreach (var fr in _mft.FileRecords)
                     {
                         foreach (var attribute in fr.Value.Attributes.Where(t =>
@@ -316,7 +313,7 @@ namespace MFTECmd
             catch (Exception ex)
             {
                 _logger.Error(
-                    $"Error exporting data. Error: {ex.Message}");
+                    $"\r\nError exporting data. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {ex.Message}");
             }
         }
 
@@ -344,8 +341,16 @@ namespace MFTECmd
             {
                 mftr.FileName = $"{mftr.FileName}:{adsinfo.Name}";
                 mftr.FileSize = adsinfo.Size;
-                mftr.Extension = Path.GetExtension(adsinfo.Name);
-
+                
+                try
+                {
+                    mftr.Extension = Path.GetExtension(adsinfo.Name);
+                }
+                catch (Exception)
+                {
+                    //sometimes bad chars show up
+                }
+                
                 if (adsinfo.Name == "Zone.Identifier")
                 {
                     if (adsinfo.ResidentData != null)
@@ -386,7 +391,6 @@ namespace MFTECmd
                 mftr.ReparseTarget = rp.PrintName;
             }
 
-
             var si = (StandardInfo) fr.Attributes.SingleOrDefault(t =>
                 t.AttributeType == AttributeType.StandardInformation);
 
@@ -398,6 +402,8 @@ namespace MFTECmd
                 mftr.LastModified0x10 = si.ContentModifiedOn;
                 mftr.LastRecordChange0x10 = si.RecordModifiedOn;
                 mftr.LastAccess0x10 = si.LastAccessedOn;
+
+                mftr.Copied = si.ContentModifiedOn < si.CreatedOn;
 
                 if (fn.FileInfo.CreatedOn != si.CreatedOn)
                 {

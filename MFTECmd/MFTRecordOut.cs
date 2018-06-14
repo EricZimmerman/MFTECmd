@@ -58,6 +58,7 @@ namespace MFTECmd
         public string LoggedUtilStream { get; set; }
         public bool Timestomped { get; set; }
         public bool uSecZeros { get; set; }
+        public bool Copied { get; set; }
     }
 
     
