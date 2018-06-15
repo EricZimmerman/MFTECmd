@@ -130,7 +130,17 @@ namespace MFTECmd
             var sw = new Stopwatch();
             sw.Start();
 
-            _mft = MftFile.Load(_fluentCommandLineParser.Object.File);
+            try
+            {
+                _mft = MftFile.Load(_fluentCommandLineParser.Object.File);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                return;
+            }
+
+            
 
             sw.Stop();
 
