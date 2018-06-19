@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Security.Principal;
 using System.Text;
 using CsvHelper;
+using Exceptionless;
 using Fclp;
 using Fclp.Internals.Extensions;
 using MFT;
@@ -27,6 +28,8 @@ namespace MFTECmd
 
         private static void Main(string[] args)
         {
+            ExceptionlessClient.Default.Startup("88KHFwswzxfnYGejAlsVDao47ySGliI6vFbQPt9C");
+
             SetupNLog();
 
             _logger = LogManager.GetCurrentClassLogger();
@@ -163,7 +166,7 @@ namespace MFTECmd
 
                 try
                 {
-                    using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8))
+                    using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8,4096*4)) //16k buffer
                     {
                         var csv = new CsvWriter(sw1);
 

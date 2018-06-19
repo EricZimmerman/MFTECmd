@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("MFTECmd")]
-[assembly: AssemblyDescription("Parse MFT files. Thats it")]
+[assembly: AssemblyDescription("Parses MFT files. Thats it")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Eric Zimerman")]
 [assembly: AssemblyProduct("MFTECmd")]
@@ -31,5 +31,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("0.2.5.0")]
+[assembly: AssemblyFileVersion("0.2.5.0")]
