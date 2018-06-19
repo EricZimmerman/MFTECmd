@@ -55,7 +55,7 @@ namespace MFTECmd
                 .As("dt")
                 .WithDescription(
                     "The custom date/time format to use when displaying time stamps. Default is: yyyy-MM-dd HH:mm:ss.fffffff")
-                .SetDefault("yyyy-MM-dd HH:mm:ss");
+                .SetDefault("yyyy-MM-dd HH:mm:ss.fffffff");
 
             _fluentCommandLineParser.Setup(arg => arg.IncludeShortNames)
                 .As("sn")
@@ -379,6 +379,8 @@ namespace MFTECmd
                 mftr.Extension = Path.GetExtension(mftr.FileName);
             }
 
+            mftr.FileSize = fr.GetFileSize();
+
             if (adsinfo != null)
             {
                 mftr.FileName = $"{mftr.FileName}:{adsinfo.Name}";
@@ -408,7 +410,7 @@ namespace MFTECmd
 
             mftr.ReferenceCount = fr.GetReferenceCount();
 
-            mftr.FileSize = fr.GetFileSize();
+            
             mftr.LogfileSequenceNumber = fr.LogSequenceNumber;
 
             var oid = (ObjectId) fr.Attributes.SingleOrDefault(t =>
