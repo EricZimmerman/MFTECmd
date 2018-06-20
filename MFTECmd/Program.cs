@@ -60,10 +60,10 @@ namespace MFTECmd
                     "The custom date/time format to use when displaying time stamps. Default is: yyyy-MM-dd HH:mm:ss.fffffff")
                 .SetDefault("yyyy-MM-dd HH:mm:ss.fffffff");
 
-            _fluentCommandLineParser.Setup(arg => arg.IncludeShortNames)
-                .As("sn")
-                .WithDescription(
-                    "Include DOS file name types. Default is false").SetDefault(false);
+//            _fluentCommandLineParser.Setup(arg => arg.IncludeShortNames)
+//                .As("sn")
+//                .WithDescription(
+//                    "Include DOS file name types. Default is false").SetDefault(false);
 
             var header =
                 $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
@@ -233,12 +233,15 @@ namespace MFTECmd
 
                         foreach (var fr in _mft.FileRecords)
                         {
+                            if (fr.Value.EntryNumber == 0x50C4)
+                            {
+                                Debug.WriteLine(1);
+                            }
                             foreach (var attribute in fr.Value.Attributes.Where(t =>
                                 t.AttributeType == AttributeType.FileName))
                             {
                                 var fn = (FileName) attribute;
-                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
-                                    fn.FileInfo.NameType == NameTypes.Dos)
+                                if (fn.FileInfo.NameType == NameTypes.Dos) //_fluentCommandLineParser.Object.IncludeShortNames == false &&
                                 {
                                     continue;
                                 }
@@ -268,8 +271,7 @@ namespace MFTECmd
                                 t.AttributeType == AttributeType.FileName))
                             {
                                 var fn = (FileName) attribute;
-                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
-                                    fn.FileInfo.NameType == NameTypes.Dos)
+                                if (fn.FileInfo.NameType == NameTypes.Dos) //_fluentCommandLineParser.Object.IncludeShortNames == false &&
                                 {
                                     continue;
                                 }
@@ -458,17 +460,17 @@ namespace MFTECmd
 
                 if (fn.FileInfo.ContentModifiedOn != si.ContentModifiedOn)
                 {
-                    mftr.LastModified0x30 = fn.FileInfo.CreatedOn;
+                    mftr.LastModified0x30 = fn.FileInfo.ContentModifiedOn;
                 }
 
                 if (fn.FileInfo.RecordModifiedOn != si.RecordModifiedOn)
                 {
-                    mftr.LastRecordChange0x30 = fn.FileInfo.CreatedOn;
+                    mftr.LastRecordChange0x30 = fn.FileInfo.RecordModifiedOn;
                 }
 
                 if (fn.FileInfo.LastAccessedOn != si.LastAccessedOn)
                 {
-                    mftr.LastAccess0x30 = fn.FileInfo.CreatedOn;
+                    mftr.LastAccess0x30 = fn.FileInfo.LastAccessedOn;
                 }
 
                 mftr.SecurityId = si.SecurityId;
