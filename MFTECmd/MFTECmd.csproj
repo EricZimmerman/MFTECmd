@@ -30,27 +30,16 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="CsvHelper, Version=7.0.0.0, Culture=neutral, PublicKeyToken=8c4959082be5c823, processorArchitecture=MSIL">
-      <HintPath>..\packages\CsvHelper.7.1.1\lib\net45\CsvHelper.dll</HintPath>
-    </Reference>
-    <Reference Include="Exceptionless, Version=4.3.2004.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Exceptionless.4.3.2004\lib\net45\Exceptionless.dll</HintPath>
-    </Reference>
-    <Reference Include="FluentCommandLineParser, Version=1.4.3.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\FluentCommandLineParser.1.4.3\lib\net35\FluentCommandLineParser.dll</HintPath>
-    </Reference>
     <Reference Include="MFT">
       <HintPath>..\Dependencies\MFT.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.VisualBasic" />
-    <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
-      <HintPath>..\packages\NLog.4.5.6\lib\net45\NLog.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
@@ -74,11 +63,24 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Build.txt" />
     <Content Include="DatabaseSelectRow.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CsvHelper">
+      <Version>7.1.1</Version>
+    </PackageReference>
+    <PackageReference Include="Exceptionless">
+      <Version>4.3.2004</Version>
+    </PackageReference>
+    <PackageReference Include="FluentCommandLineParser">
+      <Version>1.4.3</Version>
+    </PackageReference>
+    <PackageReference Include="NLog">
+      <Version>4.5.6</Version>
+    </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

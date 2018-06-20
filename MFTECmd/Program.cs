@@ -127,7 +127,7 @@ namespace MFTECmd
 
             if (IsAdministrator() == false)
             {
-                _logger.Fatal($"Warning: Administrator privileges not found!\r\n");
+                _logger.Fatal("Warning: Administrator privileges not found!\r\n");
             }
 
             var sw = new Stopwatch();
@@ -312,10 +312,10 @@ namespace MFTECmd
 
                 var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
 
-                var entryOk = false;
-                var seqOk = false;
-                var entry = -1;
-                var seq = -1;
+                bool entryOk;
+                bool seqOk;
+                int entry;
+                int seq;
 
                 if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
                 {
@@ -412,7 +412,6 @@ namespace MFTECmd
             }
 
             mftr.ReferenceCount = fr.GetReferenceCount();
-
             
             mftr.LogfileSequenceNumber = fr.LogSequenceNumber;
 
