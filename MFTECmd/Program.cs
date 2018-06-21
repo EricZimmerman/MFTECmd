@@ -32,7 +32,7 @@ namespace MFTECmd
 
             SetupNLog();
 
-            _logger = LogManager.GetCurrentClassLogger();
+            _logger = LogManager.GetLogger("MFTECmd");
 
             _fluentCommandLineParser = new FluentCommandLineParser<ApplicationArguments>
             {
@@ -66,7 +66,7 @@ namespace MFTECmd
                     "Include DOS file name types. Default is false").SetDefault(false);
 
             _fluentCommandLineParser.Setup(arg => arg.Verbose)
-                .As('v')
+                .As("vl")
                 .WithDescription(
                     "Verbose log messages. 1 == Debug, 2 == Trace").SetDefault(0);
 
@@ -135,12 +135,12 @@ namespace MFTECmd
                 _logger.Fatal("Warning: Administrator privileges not found!\r\n");
             }
 
-            if (_fluentCommandLineParser.Object.Verbose>=1)
+            if (_fluentCommandLineParser.Object.Verbose >= 1)
             {
                 LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Debug);
             }
 
-            if (_fluentCommandLineParser.Object.Verbose>=2)
+            if (_fluentCommandLineParser.Object.Verbose >= 2)
             {
                 LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Trace);
             }
@@ -181,7 +181,7 @@ namespace MFTECmd
 
                 try
                 {
-                    using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8,4096*4)) //16k buffer
+                    using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4)) //16k buffer
                     {
                         var csv = new CsvWriter(sw1);
 
@@ -202,7 +202,7 @@ namespace MFTECmd
                         foo.Map(t => t.IsDirectory).Index(11);
                         foo.Map(t => t.HasAds).Index(12);
                         foo.Map(t => t.IsAds).Index(13);
-                        foo.Map(t => t.Timestomped).Index(14);
+                        foo.Map(t => t.Timestomped).Index(14).Name("SI<FN");
                         foo.Map(t => t.uSecZeros).Index(15);
                         foo.Map(t => t.Copied).Index(16);
                         foo.Map(t => t.SiFlags).Index(17);
@@ -252,14 +252,10 @@ namespace MFTECmd
                                 t.AttributeType == AttributeType.FileName))
                             {
                                 var fn = (FileName) attribute;
-                                if (_fluentCommandLineParser.Object.IncludeShortNames == false && fn.FileInfo.NameType == NameTypes.Dos) 
+                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
+                                    fn.FileInfo.NameType == NameTypes.Dos)
                                 {
                                     continue;
-                                }
-
-                                if (fn.FileInfo.NameType == NameTypes.Dos)
-                                {
-                                    Debug.WriteLine(1);
                                 }
 
                                 var mftr = GetCsvData(fr.Value, fn, null);
@@ -287,7 +283,8 @@ namespace MFTECmd
                                 t.AttributeType == AttributeType.FileName))
                             {
                                 var fn = (FileName) attribute;
-                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&fn.FileInfo.NameType == NameTypes.Dos) 
+                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
+                                    fn.FileInfo.NameType == NameTypes.Dos)
                                 {
                                     continue;
                                 }
@@ -430,7 +427,7 @@ namespace MFTECmd
             }
 
             mftr.ReferenceCount = fr.GetReferenceCount();
-            
+
             mftr.LogfileSequenceNumber = fr.LogSequenceNumber;
 
             var oid = (ObjectId) fr.Attributes.SingleOrDefault(t =>
