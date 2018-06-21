@@ -323,6 +323,10 @@ namespace MFTECmd
         {
             foreach (var fr in records)
             {
+                if (fr.Value.EntryNumber == 0x9)
+                {
+                    Debug.WriteLine(1);
+                }
                 _logger.Trace($"Dumping record with entry: 0x{fr.Value.EntryNumber:X} at offset 0x:{fr.Value.Offset:X}");
 
                 if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
@@ -331,6 +335,23 @@ namespace MFTECmd
                     _logger.Debug($"Skipping entry # 0x{fr.Value.EntryNumber:X}, seq #: 0x{fr.Value.SequenceNumber:X} since it is an extension record.");
                     //will get this record via attributeList
                     continue;
+                }
+
+                if (fr.Value.IsDirectory() == false && _mft.ExtensionFileRecords.ContainsKey(fr.Key))
+                {
+                    foreach (var fileRecord in _mft.ExtensionFileRecords[fr.Key])
+                    {
+                        //pull in all related attributes from this record for processing later
+                        foreach (var fileRecordAttribute in fileRecord.Attributes)
+                        {
+                            if (fr.Value.Attributes.Any(t => t.Name == fileRecordAttribute.Name) == false)
+                            {
+                                fr.Value.Attributes.Add(fileRecordAttribute);    
+                            }
+                            
+                        }
+                        
+                    }
                 }
 
                 foreach (var attribute in fr.Value.Attributes.Where(t =>
