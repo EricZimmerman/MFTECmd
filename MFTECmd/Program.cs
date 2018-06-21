@@ -65,6 +65,11 @@ namespace MFTECmd
                 .WithDescription(
                     "Include DOS file name types. Default is false").SetDefault(false);
 
+            _fluentCommandLineParser.Setup(arg => arg.Verbose)
+                .As('v')
+                .WithDescription(
+                    "Verbose log messages. 1 == Debug, 2 == Trace").SetDefault(0);
+
             var header =
                 $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
                 "\r\n\r\nAuthor: Eric Zimmerman (saericzimmerman@gmail.com)" +
@@ -130,6 +135,18 @@ namespace MFTECmd
                 _logger.Fatal("Warning: Administrator privileges not found!\r\n");
             }
 
+            if (_fluentCommandLineParser.Object.Verbose>=1)
+            {
+                LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Debug);
+            }
+
+            if (_fluentCommandLineParser.Object.Verbose>=2)
+            {
+                LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Trace);
+            }
+
+            LogManager.ReconfigExistingLoggers();
+
             var sw = new Stopwatch();
             sw.Start();
 
@@ -142,8 +159,6 @@ namespace MFTECmd
                 _logger.Error($"There was an error loading the file! Error: {e.Message}");
                 return;
             }
-
-            
 
             sw.Stop();
 
@@ -237,7 +252,7 @@ namespace MFTECmd
                                 t.AttributeType == AttributeType.FileName))
                             {
                                 var fn = (FileName) attribute;
-                                if (_fluentCommandLineParser.Object.IncludeShortNames == false && fn.FileInfo.NameType == NameTypes.Dos) //
+                                if (_fluentCommandLineParser.Object.IncludeShortNames == false && fn.FileInfo.NameType == NameTypes.Dos) 
                                 {
                                     continue;
                                 }
@@ -537,5 +552,6 @@ namespace MFTECmd
         public string DateTimeFormat { get; set; }
         public bool IncludeShortNames { get; set; }
         public string DumpEntry { get; set; }
+        public int Verbose { get; set; }
     }
 }
