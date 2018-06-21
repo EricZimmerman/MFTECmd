@@ -269,6 +269,13 @@ namespace MFTECmd
 
                 var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
 
+                if (segs.Length != 2)
+                {
+                    _logger.Warn(
+                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
+                    return;
+                }
+
                 bool entryOk;
                 bool seqOk;
                 int entry;
