@@ -323,10 +323,6 @@ namespace MFTECmd
         {
             foreach (var fr in records)
             {
-                if (fr.Value.EntryNumber == 0x9)
-                {
-                    Debug.WriteLine(1);
-                }
                 _logger.Trace($"Dumping record with entry: 0x{fr.Value.EntryNumber:X} at offset 0x:{fr.Value.Offset:X}");
 
                 if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
@@ -337,6 +333,8 @@ namespace MFTECmd
                     continue;
                 }
 
+                //for directories we already pulled in extra stuff in MFT project, but for files, we need to get extension record details
+                //TODO this should happen in the MFT code, not here
                 if (fr.Value.IsDirectory() == false && _mft.ExtensionFileRecords.ContainsKey(fr.Key))
                 {
                     foreach (var fileRecord in _mft.ExtensionFileRecords[fr.Key])
@@ -348,9 +346,7 @@ namespace MFTECmd
                             {
                                 fr.Value.Attributes.Add(fileRecordAttribute);    
                             }
-                            
                         }
-                        
                     }
                 }
 
