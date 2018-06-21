@@ -248,6 +248,13 @@ namespace MFTECmd
 
                         foreach (var fr in _mft.FileRecords)
                         {
+                            if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
+                                fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
+                            {
+                                //will get this record via attributeList
+                                continue;
+                            }
+
                             foreach (var attribute in fr.Value.Attributes.Where(t =>
                                 t.AttributeType == AttributeType.FileName))
                             {
@@ -279,6 +286,14 @@ namespace MFTECmd
 
                         foreach (var fr in _mft.FreeFileRecords)
                         {
+                            if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
+                                fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
+                            {
+                                //will get this record via attributeList
+                                continue;
+                            }
+
+
                             foreach (var attribute in fr.Value.Attributes.Where(t =>
                                 t.AttributeType == AttributeType.FileName))
                             {
