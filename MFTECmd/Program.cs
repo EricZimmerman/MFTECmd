@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -246,83 +247,9 @@ namespace MFTECmd
                         csv.WriteHeader<MFTRecordOut>();
                         csv.NextRecord();
 
-                        foreach (var fr in _mft.FileRecords)
-                        {
-                            if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
-                                fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
-                            {
-                                //will get this record via attributeList
-                                continue;
-                            }
-
-                            foreach (var attribute in fr.Value.Attributes.Where(t =>
-                                t.AttributeType == AttributeType.FileName))
-                            {
-                                var fn = (FileName) attribute;
-                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
-                                    fn.FileInfo.NameType == NameTypes.Dos)
-                                {
-                                    continue;
-                                }
-
-                                var mftr = GetCsvData(fr.Value, fn, null);
-
-                                var ads = fr.Value.GetAlternateDataStreams();
-
-                                mftr.HasAds = ads.Any();
-
-                                csv.WriteRecord(mftr);
-                                csv.NextRecord();
-
-                                foreach (var adsInfo in ads)
-                                {
-                                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
-                                    adsRecord.IsAds = true;
-                                    csv.WriteRecord(adsRecord);
-                                    csv.NextRecord();
-                                }
-                            }
-                        }
-
-                        foreach (var fr in _mft.FreeFileRecords)
-                        {
-                            if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
-                                fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
-                            {
-                                //will get this record via attributeList
-                                continue;
-                            }
-
-
-                            foreach (var attribute in fr.Value.Attributes.Where(t =>
-                                t.AttributeType == AttributeType.FileName))
-                            {
-                                var fn = (FileName) attribute;
-                                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
-                                    fn.FileInfo.NameType == NameTypes.Dos)
-                                {
-                                    continue;
-                                }
-
-                                var mftrD = GetCsvData(fr.Value, fn, null);
-
-                                var ads = fr.Value.GetAlternateDataStreams();
-
-                                mftrD.HasAds = ads.Any();
-
-                                csv.WriteRecord(mftrD);
-                                csv.NextRecord();
-
-                                foreach (var adsInfo in ads)
-                                {
-                                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
-                                    adsRecord.IsAds = true;
-                                    csv.WriteRecord(adsRecord);
-                                    csv.NextRecord();
-                                }
-                            }
-                        }
-
+                        ProcessRecords(_mft.FileRecords, csv);
+                        ProcessRecords(_mft.FreeFileRecords, csv);
+                        
                         sw1.Flush();
                     }
                 }
@@ -389,6 +316,50 @@ namespace MFTECmd
                 _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
 
                 _logger.Info(fr);
+            }
+        }
+
+        private static void ProcessRecords(Dictionary<string,FileRecord> records, CsvWriter csv)
+        {
+            foreach (var fr in records)
+            {
+                _logger.Trace($"Dumping record with entry: 0x{fr.Value.EntryNumber:X} at offset 0x:{fr.Value.Offset:X}");
+
+                if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
+                    fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
+                {
+                    _logger.Debug($"Skipping entry # 0x{fr.Value.EntryNumber:X}, seq #: 0x{fr.Value.SequenceNumber:X} since it is an extension record.");
+                    //will get this record via attributeList
+                    continue;
+                }
+
+                foreach (var attribute in fr.Value.Attributes.Where(t =>
+                    t.AttributeType == AttributeType.FileName))
+                {
+                    var fn = (FileName) attribute;
+                    if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
+                        fn.FileInfo.NameType == NameTypes.Dos)
+                    {
+                        continue;
+                    }
+
+                    var mftr = GetCsvData(fr.Value, fn, null);
+
+                    var ads = fr.Value.GetAlternateDataStreams();
+
+                    mftr.HasAds = ads.Any();
+
+                    csv.WriteRecord(mftr);
+                    csv.NextRecord();
+
+                    foreach (var adsInfo in ads)
+                    {
+                        var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
+                        adsRecord.IsAds = true;
+                        csv.WriteRecord(adsRecord);
+                        csv.NextRecord();
+                    }
+                }
             }
         }
 
