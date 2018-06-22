@@ -260,70 +260,71 @@ namespace MFTECmd
                 }
             }
 
-
-            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() == false)
+            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty())
             {
-                _logger.Info("");
-
-                FileRecord fr = null;
-
-                var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
-
-                if (segs.Length != 2)
-                {
-                    _logger.Warn(
-                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
-                    return;
-                }
-
-                bool entryOk;
-                bool seqOk;
-                int entry;
-                int seq;
-
-                if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
-                {
-                    var seg0 = segs[0].Replace("0x", "");
-                    var seg1 = segs[1].Replace("0x", "");
-
-                    entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
-                    seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
-                }
-                else
-                {
-                    entryOk = int.TryParse(segs[0], out entry);
-                    seqOk = int.TryParse(segs[1], out seq);
-                }
-
-                if (entryOk == false || seqOk == false)
-                {
-                    _logger.Warn(
-                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
-                    return;
-                }
-
-                var key = $"{entry:X8}-{seq:X8}";
-
-                if (_mft.FileRecords.ContainsKey(key))
-                {
-                    fr = _mft.FileRecords[key];
-                }
-                else if (_mft.FreeFileRecords.ContainsKey(key))
-                {
-                    fr = _mft.FreeFileRecords[key];
-                }
-
-                if (fr == null)
-                {
-                    _logger.Warn(
-                        $"Could not find file record with entry/seq '{_fluentCommandLineParser.Object.DumpEntry}'. Exiting");
-                    return;
-                }
-
-                _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
-
-                _logger.Info(fr);
+                return;
             }
+
+            _logger.Info("");
+
+            FileRecord fr = null;
+
+            var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
+
+            if (segs.Length != 2)
+            {
+                _logger.Warn(
+                    $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
+                return;
+            }
+
+            bool entryOk;
+            bool seqOk;
+            int entry;
+            int seq;
+
+            if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+            {
+                var seg0 = segs[0].Replace("0x", "");
+                var seg1 = segs[1].Replace("0x", "");
+
+                entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
+                seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
+            }
+            else
+            {
+                entryOk = int.TryParse(segs[0], out entry);
+                seqOk = int.TryParse(segs[1], out seq);
+            }
+
+            if (entryOk == false || seqOk == false)
+            {
+                _logger.Warn(
+                    $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
+                return;
+            }
+
+            var key = $"{entry:X8}-{seq:X8}";
+
+            if (_mft.FileRecords.ContainsKey(key))
+            {
+                fr = _mft.FileRecords[key];
+            }
+            else if (_mft.FreeFileRecords.ContainsKey(key))
+            {
+                fr = _mft.FreeFileRecords[key];
+            }
+
+            if (fr == null)
+            {
+                _logger.Warn(
+                    $"Could not find file record with entry/seq '{_fluentCommandLineParser.Object.DumpEntry}'. Exiting");
+                return;
+            }
+
+            _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
+
+            _logger.Info(fr);
         }
 
         private static void ProcessRecords(Dictionary<string,FileRecord> records, CsvWriter csv)
@@ -336,25 +337,8 @@ namespace MFTECmd
                     fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
                 {
                     _logger.Debug($"Skipping entry # 0x{fr.Value.EntryNumber:X}, seq #: 0x{fr.Value.SequenceNumber:X} since it is an extension record.");
-                    //will get this record via attributeList
+                    //will get this record via extension records, which were already handled in MFT.dll code
                     continue;
-                }
-
-                //for directories we already pulled in extra stuff in MFT project, but for files, we need to get extension record details
-                //TODO this should happen in the MFT code, not here
-                if (fr.Value.IsDirectory() == false && _mft.ExtensionFileRecords.ContainsKey(fr.Key))
-                {
-                    foreach (var fileRecord in _mft.ExtensionFileRecords[fr.Key])
-                    {
-                        //pull in all related attributes from this record for processing later
-                        foreach (var fileRecordAttribute in fileRecord.Attributes)
-                        {
-                            if (fr.Value.Attributes.Any(t => t.Name == fileRecordAttribute.Name) == false)
-                            {
-                                fr.Value.Attributes.Add(fileRecordAttribute);    
-                            }
-                        }
-                    }
                 }
 
                 foreach (var attribute in fr.Value.Attributes.Where(t =>
