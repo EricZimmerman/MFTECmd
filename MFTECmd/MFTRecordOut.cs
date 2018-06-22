@@ -51,5 +51,8 @@ namespace MFTECmd
         public bool Timestomped { get; set; }
         public bool uSecZeros { get; set; }
         public bool Copied { get; set; }
+
+        public int FnAttributeId { get; set; }
+        public int OtherAttributeId { get; set; }
     }
 }

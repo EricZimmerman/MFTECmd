@@ -4,3 +4,7 @@ libz inject-libz -assembly .\MFTECmd.exe --libz .\Other.libz --move
 libz instrument --assembly .\MFTECmd.exe --libz-resources
 
 (sign exe)
+
+
+NEW STUFF
+- body file output (NOTE: INDEX_ROOT entries are not included (yet? maybe never))

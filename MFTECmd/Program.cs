@@ -49,6 +49,16 @@ namespace MFTECmd
                 .WithDescription(
                     "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. Required unless --de is specified");
 
+            _fluentCommandLineParser.Setup(arg => arg.BodyDirectory)
+                .As("body")
+                .WithDescription(
+                    "Directory to save bodyfile formatted results to. Be sure to include the full path in double quotes.");
+
+            _fluentCommandLineParser.Setup(arg => arg.BodyDriveLetter)
+                .As("bdl")
+                .WithDescription(
+                    "Drive letter (C, D, etc.) to use with bodyfile formatted results. Only the drive letter itself should be provided");
+
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
                 .WithDescription(
@@ -166,6 +176,47 @@ namespace MFTECmd
             _logger.Info(
                 $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
 
+            StreamWriter swBody = null;
+
+            if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false &&
+                _fluentCommandLineParser.Object.BodyDriveLetter.IsNullOrEmpty() == false)
+            {
+
+                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.body";
+                var outFile = Path.Combine(_fluentCommandLineParser.Object.BodyDirectory, outName);
+
+                _logger.Warn($"\r\nBodyfile output will be saved to '{outFile}'");
+
+                try
+                {
+                    swBody = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
+                    
+                        _bodyWriter = new CsvWriter(swBody);
+                        _bodyWriter.Configuration.Delimiter = "|";
+
+                        var foo = _bodyWriter.Configuration.AutoMap<BodyFile>();
+                        foo.Map(t => t.Md5).Index(0);
+                        foo.Map(t => t.Name).Index(1);
+                        foo.Map(t => t.Inode).Index(2);
+                        foo.Map(t => t.Mode).Index(3);
+                        foo.Map(t => t.Uid).Index(4);
+                        foo.Map(t => t.Gid).Index(5);
+                        foo.Map(t => t.Size).Index(6);
+                        foo.Map(t => t.AccessTime).Index(7);
+                        foo.Map(t => t.ModifiedTime).Index(8);
+                        foo.Map(t => t.RecordModifiedTime).Index(9);
+                        foo.Map(t => t.CreatedTime).Index(10);
+
+                        _bodyWriter.Configuration.RegisterClassMap(foo);
+
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(
+                        $"\r\nError exporting data to bodyfile. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
+                }
+            }
+
             if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
             {
                 if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
@@ -184,9 +235,9 @@ namespace MFTECmd
                 {
                     using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4)) //16k buffer
                     {
-                        var csv = new CsvWriter(sw1);
+                        _csvWriter = new CsvWriter(sw1);
 
-                        var foo = csv.Configuration.AutoMap<MFTRecordOut>();
+                        var foo = _csvWriter.Configuration.AutoMap<MFTRecordOut>();
 
                         foo.Map(t => t.EntryNumber).Index(0);
                         foo.Map(t => t.SequenceNumber).Index(1);
@@ -208,6 +259,8 @@ namespace MFTECmd
                         foo.Map(t => t.Copied).Index(16);
                         foo.Map(t => t.SiFlags).Index(17);
                         foo.Map(t => t.NameType).Index(18);
+                        foo.Map(t => t.FnAttributeId).Ignore();
+                        foo.Map(t => t.OtherAttributeId).Ignore();
 
                         foo.Map(t => t.Created0x10).ConvertUsing(t =>
                             $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
@@ -242,13 +295,13 @@ namespace MFTECmd
                         foo.Map(t => t.LoggedUtilStream).Index(31);
                         foo.Map(t => t.ZoneIdContents).Index(32);
 
-                        csv.Configuration.RegisterClassMap(foo);
+                        _csvWriter.Configuration.RegisterClassMap(foo);
 
-                        csv.WriteHeader<MFTRecordOut>();
-                        csv.NextRecord();
+                        _csvWriter.WriteHeader<MFTRecordOut>();
+                        _csvWriter.NextRecord();
 
-                        ProcessRecords(_mft.FileRecords, csv);
-                        ProcessRecords(_mft.FreeFileRecords, csv);
+                        ProcessRecords(_mft.FileRecords);
+                        ProcessRecords(_mft.FreeFileRecords);
                         
                         sw1.Flush();
                     }
@@ -260,12 +313,17 @@ namespace MFTECmd
                 }
             }
 
+            swBody?.Flush();
+            swBody?.Close();
+
             if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty())
             {
                 return;
             }
 
-            _logger.Info("");
+            #region DumpEntry
+
+                _logger.Info("");
 
             FileRecord fr = null;
 
@@ -325,9 +383,14 @@ namespace MFTECmd
             _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
 
             _logger.Info(fr);
+
+            #endregion
         }
 
-        private static void ProcessRecords(Dictionary<string,FileRecord> records, CsvWriter csv)
+        private static CsvWriter _bodyWriter;
+        private static CsvWriter _csvWriter;
+
+        private static void ProcessRecords(Dictionary<string,FileRecord> records)
         {
             foreach (var fr in records)
             {
@@ -351,24 +414,149 @@ namespace MFTECmd
                         continue;
                     }
 
+                    if (fn.FileInfo.FileName.Contains("$Quota"))
+                    {
+                        Debug.WriteLine(1);
+                    }
+
                     var mftr = GetCsvData(fr.Value, fn, null);
 
                     var ads = fr.Value.GetAlternateDataStreams();
 
                     mftr.HasAds = ads.Any();
 
-                    csv.WriteRecord(mftr);
-                    csv.NextRecord();
+                    _csvWriter?.WriteRecord(mftr);
+                    _csvWriter?.NextRecord();
+
+                    var f = GetBodyData(mftr, true);
+
+                    _bodyWriter?.WriteRecord(f);
+                    _bodyWriter?.NextRecord();
+
+                    f = GetBodyData(mftr, false);
+
+                    _bodyWriter?.WriteRecord(f);
+                    _bodyWriter?.NextRecord();
 
                     foreach (var adsInfo in ads)
                     {
                         var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
                         adsRecord.IsAds = true;
-                        csv.WriteRecord(adsRecord);
-                        csv.NextRecord();
+                        _csvWriter?.WriteRecord(adsRecord);
+                        _csvWriter?.NextRecord();
+
+                        var f1 = GetBodyData(adsRecord, true);
+
+                        _bodyWriter?.WriteRecord(f1);
+                        _bodyWriter?.NextRecord();
                     }
                 }
             }
+        }
+
+        private static BodyFile GetBodyData(MFTRecordOut mftr, bool getStandardInfo)
+        {
+            var b = new BodyFile
+            {
+                Name = $"{_fluentCommandLineParser.Object.BodyDriveLetter.ToLowerInvariant()}:{mftr.ParentPath.Substring(1)}\\{mftr.FileName}".Replace("\\","/"),
+                Gid = 0,
+                Uid = 0,
+                Mode = "r/rrwxrwxrwx",
+                Md5 = "0",
+                Size = mftr.FileSize
+            };
+
+            if (getStandardInfo)
+            {
+                if (mftr.LastAccess0x10 != null)
+                {
+                    b.AccessTime = mftr.LastAccess0x10.Value.ToUnixTimeSeconds();
+                }
+
+                if (mftr.LastModified0x10 != null)
+                {
+                    b.ModifiedTime = mftr.LastModified0x10.Value.ToUnixTimeSeconds();
+                }
+
+                if (mftr.LastRecordChange0x10 != null)
+                {
+                    b.RecordModifiedTime = mftr.LastRecordChange0x10.Value.ToUnixTimeSeconds();
+                }
+
+                if (mftr.Created0x10 != null)
+                {
+                    b.CreatedTime = mftr.Created0x10.Value.ToUnixTimeSeconds();
+                }
+
+                if (mftr.IsDirectory)
+                {
+                    b.Inode = $"{mftr.EntryNumber}-144-{mftr.OtherAttributeId}";
+                }
+                else
+                {
+                    b.Inode = $"{mftr.EntryNumber}-128-{mftr.OtherAttributeId}";
+                }
+            }
+            else
+            {
+                b.Name = $"{b.Name} ($FILE_NAME)";
+                if (mftr.LastAccess0x30 != null)
+                {
+                    b.AccessTime = mftr.LastAccess0x30.Value.ToUnixTimeSeconds();
+                }
+                else
+                {
+                    if (mftr.LastAccess0x10 != null)
+                    {
+                        b.AccessTime = mftr.LastAccess0x10.Value.ToUnixTimeSeconds();
+                    }
+                }
+
+                if (mftr.LastModified0x30 != null)
+                {
+                    b.ModifiedTime = mftr.LastModified0x30.Value.ToUnixTimeSeconds();
+                }
+                else
+                {
+                    if (mftr.LastModified0x10 != null)
+                    {
+                        b.ModifiedTime = mftr.LastModified0x10.Value.ToUnixTimeSeconds();
+                    }
+                }
+
+                if (mftr.LastRecordChange0x30 != null)
+                {
+                    b.RecordModifiedTime = mftr.LastRecordChange0x30.Value.ToUnixTimeSeconds();
+                }
+                else
+                {
+                    if (mftr.LastRecordChange0x10 != null)
+                    {
+                        b.RecordModifiedTime = mftr.LastRecordChange0x10.Value.ToUnixTimeSeconds();
+                    }
+                }
+
+                if (mftr.Created0x30 != null)
+                {
+                    b.CreatedTime = mftr.Created0x30.Value.ToUnixTimeSeconds();
+                }
+                else
+                {
+                    if (mftr.Created0x10 != null)
+                    {
+                        b.CreatedTime = mftr.Created0x10.Value.ToUnixTimeSeconds();
+                    }
+                }
+
+                b.Inode = $"{mftr.EntryNumber}-48-{mftr.FnAttributeId}";
+            }
+
+            if (mftr.InUse == false)
+            {
+                b.Name = $"{b.Name} (deleted)";
+            }
+
+            return b;
         }
 
         public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo)
@@ -383,12 +571,21 @@ namespace MFTECmd
                 IsDirectory = fr.IsDirectory(),
                 ParentEntryNumber = fn.FileInfo.ParentMftRecord.MftEntryNumber,
                 ParentSequenceNumber = fn.FileInfo.ParentMftRecord.MftSequenceNumber,
-                NameType = fn.FileInfo.NameType
+                NameType = fn.FileInfo.NameType,
+                FnAttributeId = fn.AttributeNumber
             };
 
             if (mftr.IsDirectory == false)
             {
                 mftr.Extension = Path.GetExtension(mftr.FileName);
+
+                var data = fr.Attributes.FirstOrDefault(t => t.AttributeType == AttributeType.Data);
+
+                if (data!= null)
+                {
+                    mftr.OtherAttributeId = data.AttributeNumber;
+                }
+                
             }
 
             mftr.FileSize = fr.GetFileSize();
@@ -451,6 +648,7 @@ namespace MFTECmd
 
             if (si != null)
             {
+                
                 mftr.UpdateSequenceNumber = si.UpdateSequenceNumber;
 
                 mftr.Created0x10 = si.CreatedOn;
@@ -544,5 +742,8 @@ namespace MFTECmd
         public bool IncludeShortNames { get; set; }
         public string DumpEntry { get; set; }
         public int Verbose { get; set; }
+
+        public string BodyDirectory {get; set; }
+        public string BodyDriveLetter {get; set; }
     }
 }
