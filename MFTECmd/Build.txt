@@ -12,3 +12,4 @@ NEW STUFF
 
 
 TODO
+- dump file record to binary
