@@ -62,6 +62,16 @@ namespace MFTECmd
                 .WithDescription(
                     "Drive letter (C, D, etc.) to use with bodyfile formatted results. Only the drive letter itself should be provided");
 
+            _fluentCommandLineParser.Setup(arg => arg.DumpDir)
+                .As("dd")
+                .WithDescription(
+                    "Directory to save exported FILE record. Be sure to include the full path in double quotes. --do is also required when using this option");
+
+            _fluentCommandLineParser.Setup(arg => arg.DumpOffset)
+                .As("do")
+                .WithDescription(
+                    "Offset of the FILE record to dumpas decimal or hex. Example: 5120 or 0x1400 Use --de or --vl 1 to see offsets");
+
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
                 .WithDescription(
@@ -134,11 +144,12 @@ namespace MFTECmd
 
             if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
                 _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() &&
-                _fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty())
+                _fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty()&&
+                _fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty())
             {
                 _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
-                _logger.Warn("--csv, --body or --de is required. Exiting");
+                _logger.Warn("--csv, --body, --dd, or --de is required. Exiting");
                 return;
             }
 
@@ -150,6 +161,16 @@ namespace MFTECmd
                 _logger.Warn("--bdl is required when using --body. Exiting");
                 return;
             }
+
+            if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty() == false &&
+                _fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty())
+            {
+                _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+
+                _logger.Warn("--do is required when using --dd. Exiting");
+                return;
+            }
+
 
 
             _logger.Info(header);
@@ -353,73 +374,118 @@ namespace MFTECmd
             swBody?.Flush();
             swBody?.Close();
 
-            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty())
+       
+
+            #region ExportRecord
+
+            if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty() == false)
             {
-                return;
+                _logger.Info("");
+
+                bool offsetOk;
+                long offset;
+
+                if (_fluentCommandLineParser.Object.DumpOffset.StartsWith("0x"))
+                {
+
+                    offsetOk = long.TryParse(_fluentCommandLineParser.Object.DumpOffset.Replace("0x",""), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out offset);
+                }
+                else
+                {
+                    offsetOk = long.TryParse(_fluentCommandLineParser.Object.DumpOffset, out offset);
+                }
+
+                if (offsetOk)
+                {
+                    using (var b = new BinaryReader(File.OpenRead(_fluentCommandLineParser.Object.File)))
+                    {
+                        b.BaseStream.Seek(offset, 0);
+
+                        var fileBytes = b.ReadBytes(1024);
+
+                        var outFile = $"MFTECmd_FILE_Offset0x{offset:X}.bin";
+                        var outFull = Path.Combine(_fluentCommandLineParser.Object.DumpDir, outFile);
+
+                        File.WriteAllBytes(outFull,fileBytes);
+
+                        _logger.Warn($"FILE record at offset 0x{offset:X} dumped to '{outFull}'\r\n");
+                    }    
+                }
+                else
+                {
+                    _logger.Warn(
+                        $"Could not parse '{_fluentCommandLineParser.Object.DumpOffset}' to valid value. Exiting");
+                    return;
+                }
             }
+
+            #endregion
 
             #region DumpEntry
 
-            _logger.Info("");
-
-            FileRecord fr = null;
-
-            var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
-
-            if (segs.Length != 2)
+            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() == false)
             {
-                _logger.Warn(
-                    $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
-                return;
+                _logger.Info("");
+
+                FileRecord fr = null;
+
+                var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
+
+                if (segs.Length != 2)
+                {
+                    _logger.Warn(
+                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
+                    return;
+                }
+
+                bool entryOk;
+                bool seqOk;
+                int entry;
+                int seq;
+
+                if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                {
+                    var seg0 = segs[0].Replace("0x", "");
+                    var seg1 = segs[1].Replace("0x", "");
+
+                    entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
+                    seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
+                }
+                else
+                {
+                    entryOk = int.TryParse(segs[0], out entry);
+                    seqOk = int.TryParse(segs[1], out seq);
+                }
+
+                if (entryOk == false || seqOk == false)
+                {
+                    _logger.Warn(
+                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
+                    return;
+                }
+
+                var key = $"{entry:X8}-{seq:X8}";
+
+                if (_mft.FileRecords.ContainsKey(key))
+                {
+                    fr = _mft.FileRecords[key];
+                }
+                else if (_mft.FreeFileRecords.ContainsKey(key))
+                {
+                    fr = _mft.FreeFileRecords[key];
+                }
+
+                if (fr == null)
+                {
+                    _logger.Warn(
+                        $"Could not find file record with entry/seq '{_fluentCommandLineParser.Object.DumpEntry}'. Exiting");
+                    return;
+                }
+
+                _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
+
+                _logger.Info(fr);
             }
-
-            bool entryOk;
-            bool seqOk;
-            int entry;
-            int seq;
-
-            if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
-            {
-                var seg0 = segs[0].Replace("0x", "");
-                var seg1 = segs[1].Replace("0x", "");
-
-                entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
-                seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
-            }
-            else
-            {
-                entryOk = int.TryParse(segs[0], out entry);
-                seqOk = int.TryParse(segs[1], out seq);
-            }
-
-            if (entryOk == false || seqOk == false)
-            {
-                _logger.Warn(
-                    $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
-                return;
-            }
-
-            var key = $"{entry:X8}-{seq:X8}";
-
-            if (_mft.FileRecords.ContainsKey(key))
-            {
-                fr = _mft.FileRecords[key];
-            }
-            else if (_mft.FreeFileRecords.ContainsKey(key))
-            {
-                fr = _mft.FreeFileRecords[key];
-            }
-
-            if (fr == null)
-            {
-                _logger.Warn(
-                    $"Could not find file record with entry/seq '{_fluentCommandLineParser.Object.DumpEntry}'. Exiting");
-                return;
-            }
-
-            _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
-
-            _logger.Info(fr);
 
             #endregion
         }
@@ -783,5 +849,8 @@ namespace MFTECmd
 
         public string BodyDirectory { get; set; }
         public string BodyDriveLetter { get; set; }
+
+        public string DumpDir { get; set; }
+        public string DumpOffset { get;set; }
     }
 }

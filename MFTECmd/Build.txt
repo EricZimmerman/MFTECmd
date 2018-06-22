@@ -9,7 +9,9 @@ libz instrument --assembly .\MFTECmd.exe --libz-resources
 NEW STUFF
 - body file output (NOTE: INDEX_ROOT entries are not included (yet? maybe never))
 - remove msg about -d switch in -f switch
+- added --dd and --do switches
 
 
 TODO
-- dump file record to binary
+- cleam up help screen
+- format TOSTRING of things better in MFT project
