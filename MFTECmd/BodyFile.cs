@@ -8,7 +8,7 @@ namespace MFTECmd
 {
   public  class BodyFile
     {
-        public string Md5 { get; set; }
+        public int Md5 { get; set; }
         public string Name { get; set; }
         public string Inode { get; set; }
         public string Mode { get; set; }

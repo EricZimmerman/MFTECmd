@@ -27,6 +27,9 @@ namespace MFTECmd
         private static FluentCommandLineParser<ApplicationArguments> _fluentCommandLineParser;
         private static Mft _mft;
 
+        private static CsvWriter _bodyWriter;
+        private static CsvWriter _csvWriter;
+
         private static void Main(string[] args)
         {
             ExceptionlessClient.Default.Startup("88KHFwswzxfnYGejAlsVDao47ySGliI6vFbQPt9C");
@@ -42,17 +45,17 @@ namespace MFTECmd
 
             _fluentCommandLineParser.Setup(arg => arg.File)
                 .As('f')
-                .WithDescription("File to process. Either this or -d is required");
+                .WithDescription("File to process. Required");
 
             _fluentCommandLineParser.Setup(arg => arg.CsvDirectory)
                 .As("csv")
                 .WithDescription(
-                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. Required unless --de is specified");
+                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. Required unless --de or --body is specified");
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDirectory)
                 .As("body")
                 .WithDescription(
-                    "Directory to save bodyfile formatted results to. Be sure to include the full path in double quotes.");
+                    "Directory to save bodyfile formatted results to. Be sure to include the full path in double quotes. --bdl is also required when using this option");
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDriveLetter)
                 .As("bdl")
@@ -88,6 +91,7 @@ namespace MFTECmd
 
             var footer = @"Examples: MFTECmd.exe -f ""C:\Temp\SomeMFT""" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
+                         @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
                          "\r\n\t" +
                          "  Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes\r\n";
@@ -129,13 +133,24 @@ namespace MFTECmd
             }
 
             if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
-                _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty())
+                _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() &&
+                _fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty())
             {
                 _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
-                _logger.Warn("--csv or --de is required. Exiting");
+                _logger.Warn("--csv, --body or --de is required. Exiting");
                 return;
             }
+
+            if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false &&
+                _fluentCommandLineParser.Object.BodyDriveLetter.IsNullOrEmpty())
+            {
+                _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+
+                _logger.Warn("--bdl is required when using --body. Exiting");
+                return;
+            }
+
 
             _logger.Info(header);
             _logger.Info("");
@@ -177,10 +192,19 @@ namespace MFTECmd
                 $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
 
             StreamWriter swBody = null;
+            StreamWriter swCsv = null;
 
-            if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false &&
-                _fluentCommandLineParser.Object.BodyDriveLetter.IsNullOrEmpty() == false)
+            if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false)
             {
+                _fluentCommandLineParser.Object.BodyDriveLetter =
+                    _fluentCommandLineParser.Object.BodyDriveLetter.Substring(0, 1);
+
+                if (Directory.Exists(_fluentCommandLineParser.Object.BodyDirectory) == false)
+                {
+                    _logger.Warn(
+                        $"Path to '{_fluentCommandLineParser.Object.BodyDirectory}' doesn't exist. Creating...");
+                    Directory.CreateDirectory(_fluentCommandLineParser.Object.BodyDirectory);
+                }
 
                 var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.body";
                 var outFile = Path.Combine(_fluentCommandLineParser.Object.BodyDirectory, outName);
@@ -190,30 +214,30 @@ namespace MFTECmd
                 try
                 {
                     swBody = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
-                    
-                        _bodyWriter = new CsvWriter(swBody);
-                        _bodyWriter.Configuration.Delimiter = "|";
 
-                        var foo = _bodyWriter.Configuration.AutoMap<BodyFile>();
-                        foo.Map(t => t.Md5).Index(0);
-                        foo.Map(t => t.Name).Index(1);
-                        foo.Map(t => t.Inode).Index(2);
-                        foo.Map(t => t.Mode).Index(3);
-                        foo.Map(t => t.Uid).Index(4);
-                        foo.Map(t => t.Gid).Index(5);
-                        foo.Map(t => t.Size).Index(6);
-                        foo.Map(t => t.AccessTime).Index(7);
-                        foo.Map(t => t.ModifiedTime).Index(8);
-                        foo.Map(t => t.RecordModifiedTime).Index(9);
-                        foo.Map(t => t.CreatedTime).Index(10);
+                    _bodyWriter = new CsvWriter(swBody);
+                    _bodyWriter.Configuration.Delimiter = "|";
 
-                        _bodyWriter.Configuration.RegisterClassMap(foo);
+                    var foo = _bodyWriter.Configuration.AutoMap<BodyFile>();
+                    foo.Map(t => t.Md5).Index(0);
+                    foo.Map(t => t.Name).Index(1);
+                    foo.Map(t => t.Inode).Index(2);
+                    foo.Map(t => t.Mode).Index(3);
+                    foo.Map(t => t.Uid).Index(4);
+                    foo.Map(t => t.Gid).Index(5);
+                    foo.Map(t => t.Size).Index(6);
+                    foo.Map(t => t.AccessTime).Index(7);
+                    foo.Map(t => t.ModifiedTime).Index(8);
+                    foo.Map(t => t.RecordModifiedTime).Index(9);
+                    foo.Map(t => t.CreatedTime).Index(10);
 
+                    _bodyWriter.Configuration.RegisterClassMap(foo);
                 }
                 catch (Exception e)
                 {
                     _logger.Error(
-                        $"\r\nError exporting data to bodyfile. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
+                        $"\r\nError setting up bodyfile export. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
+                    _bodyWriter = null;
                 }
             }
 
@@ -233,78 +257,88 @@ namespace MFTECmd
 
                 try
                 {
-                    using (var sw1 = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4)) //16k buffer
-                    {
-                        _csvWriter = new CsvWriter(sw1);
+                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
 
-                        var foo = _csvWriter.Configuration.AutoMap<MFTRecordOut>();
+                    _csvWriter = new CsvWriter(swCsv);
 
-                        foo.Map(t => t.EntryNumber).Index(0);
-                        foo.Map(t => t.SequenceNumber).Index(1);
-                        foo.Map(t => t.InUse).Index(2);
-                        foo.Map(t => t.ParentEntryNumber).Index(3);
-                        foo.Map(t => t.ParentSequenceNumber).Index(4);
-                        foo.Map(t => t.ParentPath).Index(5);
-                        foo.Map(t => t.FileName).Index(6);
-                        foo.Map(t => t.Extension).Index(7);
-                        foo.Map(t => t.FileSize).Index(8);
-                        foo.Map(t => t.ReferenceCount).Index(9);
-                        foo.Map(t => t.ReparseTarget).Index(10);
+                    var foo = _csvWriter.Configuration.AutoMap<MFTRecordOut>();
 
-                        foo.Map(t => t.IsDirectory).Index(11);
-                        foo.Map(t => t.HasAds).Index(12);
-                        foo.Map(t => t.IsAds).Index(13);
-                        foo.Map(t => t.Timestomped).Index(14).Name("SI<FN");
-                        foo.Map(t => t.uSecZeros).Index(15);
-                        foo.Map(t => t.Copied).Index(16);
-                        foo.Map(t => t.SiFlags).Index(17);
-                        foo.Map(t => t.NameType).Index(18);
-                        foo.Map(t => t.FnAttributeId).Ignore();
-                        foo.Map(t => t.OtherAttributeId).Ignore();
+                    foo.Map(t => t.EntryNumber).Index(0);
+                    foo.Map(t => t.SequenceNumber).Index(1);
+                    foo.Map(t => t.InUse).Index(2);
+                    foo.Map(t => t.ParentEntryNumber).Index(3);
+                    foo.Map(t => t.ParentSequenceNumber).Index(4);
+                    foo.Map(t => t.ParentPath).Index(5);
+                    foo.Map(t => t.FileName).Index(6);
+                    foo.Map(t => t.Extension).Index(7);
+                    foo.Map(t => t.FileSize).Index(8);
+                    foo.Map(t => t.ReferenceCount).Index(9);
+                    foo.Map(t => t.ReparseTarget).Index(10);
 
-                        foo.Map(t => t.Created0x10).ConvertUsing(t =>
-                            $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
-                        foo.Map(t => t.Created0x30).ConvertUsing(t =>
-                            $"{t.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(20);
+                    foo.Map(t => t.IsDirectory).Index(11);
+                    foo.Map(t => t.HasAds).Index(12);
+                    foo.Map(t => t.IsAds).Index(13);
+                    foo.Map(t => t.Timestomped).Index(14).Name("SI<FN");
+                    foo.Map(t => t.uSecZeros).Index(15);
+                    foo.Map(t => t.Copied).Index(16);
+                    foo.Map(t => t.SiFlags).Index(17);
+                    foo.Map(t => t.NameType).Index(18);
 
-                        foo.Map(t => t.LastModified0x10).ConvertUsing(t =>
-                                $"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
-                            .Index(21);
-                        foo.Map(t => t.LastModified0x30).ConvertUsing(t =>
-                                $"{t.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
-                            .Index(22);
+                    foo.Map(t => t.Created0x10).ConvertUsing(t =>
+                        $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
+                    foo.Map(t => t.Created0x30).ConvertUsing(t =>
+                        $"{t.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(20);
 
-                        foo.Map(t => t.LastRecordChange0x10).ConvertUsing(t =>
-                                $"{t.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
-                            .Index(23);
-                        foo.Map(t => t.LastRecordChange0x30).ConvertUsing(t =>
-                                $"{t.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
-                            .Index(24);
+                    foo.Map(t => t.LastModified0x10).ConvertUsing(t =>
+                            $"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                        .Index(21);
+                    foo.Map(t => t.LastModified0x30).ConvertUsing(t =>
+                            $"{t.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                        .Index(22);
 
-                        foo.Map(t => t.LastAccess0x10).ConvertUsing(t =>
-                            $"{t.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(25);
+                    foo.Map(t => t.LastRecordChange0x10).ConvertUsing(t =>
+                            $"{t.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                        .Index(23);
+                    foo.Map(t => t.LastRecordChange0x30).ConvertUsing(t =>
+                            $"{t.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                        .Index(24);
 
-                        foo.Map(t => t.LastAccess0x30).ConvertUsing(t =>
-                            $"{t.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(26);
+                    foo.Map(t => t.LastAccess0x10).ConvertUsing(t =>
+                        $"{t.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(25);
 
-                        foo.Map(t => t.UpdateSequenceNumber).Index(27);
-                        foo.Map(t => t.LogfileSequenceNumber).Index(28);
-                        foo.Map(t => t.SecurityId).Index(29);
+                    foo.Map(t => t.LastAccess0x30).ConvertUsing(t =>
+                        $"{t.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(26);
 
-                        foo.Map(t => t.ObjectIdFileDroid).Index(30);
-                        foo.Map(t => t.LoggedUtilStream).Index(31);
-                        foo.Map(t => t.ZoneIdContents).Index(32);
+                    foo.Map(t => t.UpdateSequenceNumber).Index(27);
+                    foo.Map(t => t.LogfileSequenceNumber).Index(28);
+                    foo.Map(t => t.SecurityId).Index(29);
 
-                        _csvWriter.Configuration.RegisterClassMap(foo);
+                    foo.Map(t => t.ObjectIdFileDroid).Index(30);
+                    foo.Map(t => t.LoggedUtilStream).Index(31);
+                    foo.Map(t => t.ZoneIdContents).Index(32);
 
-                        _csvWriter.WriteHeader<MFTRecordOut>();
-                        _csvWriter.NextRecord();
+                    foo.Map(t => t.FnAttributeId).Ignore();
+                    foo.Map(t => t.OtherAttributeId).Ignore();
 
-                        ProcessRecords(_mft.FileRecords);
-                        ProcessRecords(_mft.FreeFileRecords);
-                        
-                        sw1.Flush();
-                    }
+                    _csvWriter.Configuration.RegisterClassMap(foo);
+
+                    _csvWriter.WriteHeader<MFTRecordOut>();
+                    _csvWriter.NextRecord();
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(
+                        $"\r\nError setting up CSV export. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
+                    _csvWriter = null;
+                }
+            }
+
+            if (swBody != null || swCsv != null)
+            {
+                try
+                {
+                    ProcessRecords(_mft.FileRecords);
+                    ProcessRecords(_mft.FreeFileRecords);
                 }
                 catch (Exception ex)
                 {
@@ -312,6 +346,9 @@ namespace MFTECmd
                         $"\r\nError exporting data. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {ex.Message}");
                 }
             }
+
+            swCsv?.Flush();
+            swCsv?.Close();
 
             swBody?.Flush();
             swBody?.Close();
@@ -323,7 +360,7 @@ namespace MFTECmd
 
             #region DumpEntry
 
-                _logger.Info("");
+            _logger.Info("");
 
             FileRecord fr = null;
 
@@ -387,19 +424,18 @@ namespace MFTECmd
             #endregion
         }
 
-        private static CsvWriter _bodyWriter;
-        private static CsvWriter _csvWriter;
-
-        private static void ProcessRecords(Dictionary<string,FileRecord> records)
+        private static void ProcessRecords(Dictionary<string, FileRecord> records)
         {
             foreach (var fr in records)
             {
-                _logger.Trace($"Dumping record with entry: 0x{fr.Value.EntryNumber:X} at offset 0x:{fr.Value.Offset:X}");
+                _logger.Trace(
+                    $"Dumping record with entry: 0x{fr.Value.EntryNumber:X} at offset 0x:{fr.Value.Offset:X}");
 
                 if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
                     fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
                 {
-                    _logger.Debug($"Skipping entry # 0x{fr.Value.EntryNumber:X}, seq #: 0x{fr.Value.SequenceNumber:X} since it is an extension record.");
+                    _logger.Debug(
+                        $"Skipping entry # 0x{fr.Value.EntryNumber:X}, seq #: 0x{fr.Value.SequenceNumber:X} since it is an extension record.");
                     //will get this record via extension records, which were already handled in MFT.dll code
                     continue;
                 }
@@ -423,15 +459,19 @@ namespace MFTECmd
                     _csvWriter?.WriteRecord(mftr);
                     _csvWriter?.NextRecord();
 
-                    var f = GetBodyData(mftr, true);
+                    if (_bodyWriter != null)
+                    {
+                        var f = GetBodyData(mftr, true);
 
-                    _bodyWriter?.WriteRecord(f);
-                    _bodyWriter?.NextRecord();
+                        _bodyWriter.WriteRecord(f);
+                        _bodyWriter.NextRecord();
 
-                    f = GetBodyData(mftr, false);
+                        f = GetBodyData(mftr, false);
 
-                    _bodyWriter?.WriteRecord(f);
-                    _bodyWriter?.NextRecord();
+                        _bodyWriter.WriteRecord(f);
+                        _bodyWriter.NextRecord();
+                    }
+
 
                     foreach (var adsInfo in ads)
                     {
@@ -440,10 +480,13 @@ namespace MFTECmd
                         _csvWriter?.WriteRecord(adsRecord);
                         _csvWriter?.NextRecord();
 
-                        var f1 = GetBodyData(adsRecord, true);
+                        if (_bodyWriter != null)
+                        {
+                            var f1 = GetBodyData(adsRecord, true);
 
-                        _bodyWriter?.WriteRecord(f1);
-                        _bodyWriter?.NextRecord();
+                            _bodyWriter.WriteRecord(f1);
+                            _bodyWriter.NextRecord();
+                        }
                     }
                 }
             }
@@ -453,11 +496,13 @@ namespace MFTECmd
         {
             var b = new BodyFile
             {
-                Name = $"{_fluentCommandLineParser.Object.BodyDriveLetter.ToLowerInvariant()}:{mftr.ParentPath.Substring(1)}\\{mftr.FileName}".Replace("\\","/"),
+                Name =
+                    $"{_fluentCommandLineParser.Object.BodyDriveLetter.ToLowerInvariant()}:{mftr.ParentPath.Substring(1)}\\{mftr.FileName}"
+                        .Replace("\\", "/"),
                 Gid = 0,
                 Uid = 0,
                 Mode = "r/rrwxrwxrwx",
-                Md5 = "0",
+                Md5 = 0,
                 Size = mftr.FileSize
             };
 
@@ -576,11 +621,10 @@ namespace MFTECmd
 
                 var data = fr.Attributes.FirstOrDefault(t => t.AttributeType == AttributeType.Data);
 
-                if (data!= null)
+                if (data != null)
                 {
                     mftr.OtherAttributeId = data.AttributeNumber;
                 }
-                
             }
 
             mftr.FileSize = fr.GetFileSize();
@@ -643,7 +687,6 @@ namespace MFTECmd
 
             if (si != null)
             {
-                
                 mftr.UpdateSequenceNumber = si.UpdateSequenceNumber;
 
                 mftr.Created0x10 = si.CreatedOn;
@@ -738,7 +781,7 @@ namespace MFTECmd
         public string DumpEntry { get; set; }
         public int Verbose { get; set; }
 
-        public string BodyDirectory {get; set; }
-        public string BodyDriveLetter {get; set; }
+        public string BodyDirectory { get; set; }
+        public string BodyDriveLetter { get; set; }
     }
 }
