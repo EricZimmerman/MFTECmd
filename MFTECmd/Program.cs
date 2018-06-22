@@ -414,11 +414,6 @@ namespace MFTECmd
                         continue;
                     }
 
-                    if (fn.FileInfo.FileName.Contains("$Quota"))
-                    {
-                        Debug.WriteLine(1);
-                    }
-
                     var mftr = GetCsvData(fr.Value, fn, null);
 
                     var ads = fr.Value.GetAlternateDataStreams();

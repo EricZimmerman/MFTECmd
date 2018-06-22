@@ -8,3 +8,8 @@ libz instrument --assembly .\MFTECmd.exe --libz-resources
 
 NEW STUFF
 - body file output (NOTE: INDEX_ROOT entries are not included (yet? maybe never))
+
+TODO
+- make cmd line switches fail safe for body/csv etc
+- clean up streamwriter for csv
+- refactor around the changes made for body support
