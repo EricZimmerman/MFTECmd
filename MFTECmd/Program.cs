@@ -45,12 +45,12 @@ namespace MFTECmd
 
             _fluentCommandLineParser.Setup(arg => arg.File)
                 .As('f')
-                .WithDescription("File to process. Required");
+                .WithDescription("File to process. Required\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.CsvDirectory)
                 .As("csv")
                 .WithDescription(
-                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. Required unless --de or --body is specified");
+                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. Required unless --de or --body is specified\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDirectory)
                 .As("body")
@@ -60,7 +60,7 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.BodyDriveLetter)
                 .As("bdl")
                 .WithDescription(
-                    "Drive letter (C, D, etc.) to use with bodyfile formatted results. Only the drive letter itself should be provided");
+                    "Drive letter (C, D, etc.) to use with bodyfile formatted results. Only the drive letter itself should be provided\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.DumpDir)
                 .As("dd")
@@ -70,7 +70,7 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.DumpOffset)
                 .As("do")
                 .WithDescription(
-                    "Offset of the FILE record to dumpas decimal or hex. Example: 5120 or 0x1400 Use --de or --vl 1 to see offsets");
+                    "Offset of the FILE record to dumpas decimal or hex. Example: 5120 or 0x1400 Use --de or --vl 1 to see offsets\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
