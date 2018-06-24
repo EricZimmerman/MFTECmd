@@ -18,3 +18,4 @@ TODO
 		.\MFTECmd.exe -f D:\SynologyDrive\MFTs\vanko\vanko_MFT --de 244564-16
 		"main" one is first FILE_NAME attrib of type Windows or DosWindows
 		order FNs by attr type so those go to top?
+		find hard link in vanko and compare to xwf from mft and e01
