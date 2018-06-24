@@ -507,7 +507,7 @@ namespace MFTECmd
                 }
 
                 foreach (var attribute in fr.Value.Attributes.Where(t =>
-                    t.AttributeType == AttributeType.FileName))
+                    t.AttributeType == AttributeType.FileName).OrderBy(t=>((FileName)t).FileInfo.NameType))
                 {
                     var fn = (FileName) attribute;
                     if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
