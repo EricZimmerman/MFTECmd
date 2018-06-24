@@ -15,3 +15,6 @@ NEW STUFF
 
 TODO
 - switch -hl to NOT include hard links
+		.\MFTECmd.exe -f D:\SynologyDrive\MFTs\vanko\vanko_MFT --de 244564-16
+		"main" one is first FILE_NAME attrib of type Windows or DosWindows
+		order FNs by attr type so those go to top?
