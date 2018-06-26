@@ -302,7 +302,7 @@ namespace MFTECmd
                     foo.Map(t => t.Timestomped).Index(14).Name("SI<FN");
                     foo.Map(t => t.uSecZeros).Index(15);
                     foo.Map(t => t.Copied).Index(16);
-                    foo.Map(t => t.SiFlags).Index(17);
+                    foo.Map(t => t.SiFlags).ConvertUsing(t=>t.SiFlags.ToString().Replace(", ","|")).Index(17);
                     foo.Map(t => t.NameType).Index(18);
 
                     foo.Map(t => t.Created0x10).ConvertUsing(t =>
