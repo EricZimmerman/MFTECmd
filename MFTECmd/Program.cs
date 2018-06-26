@@ -30,6 +30,8 @@ namespace MFTECmd
         private static CsvWriter _bodyWriter;
         private static CsvWriter _csvWriter;
 
+        private static string exportExt = "csv";
+
         private static void Main(string[] args)
         {
             ExceptionlessClient.Default.Startup("88KHFwswzxfnYGejAlsVDao47ySGliI6vFbQPt9C");
@@ -93,6 +95,11 @@ namespace MFTECmd
                 .As("vl")
                 .WithDescription(
                     "Verbose log messages. 1 == Debug, 2 == Trace").SetDefault(0);
+
+            _fluentCommandLineParser.Setup(arg => arg.CsvSeparator)
+                .As("cs")
+                .WithDescription(
+                    "When true, use comma instead of tab for field separator. Default is true").SetDefault(true);
 
             var header =
                 $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
@@ -171,7 +178,10 @@ namespace MFTECmd
                 return;
             }
 
-
+            if (_fluentCommandLineParser.Object.CsvSeparator == false)
+            {
+                exportExt = "tsv";
+            }
 
             _logger.Info(header);
             _logger.Info("");
@@ -271,7 +281,7 @@ namespace MFTECmd
                     Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                 }
 
-                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.csv";
+                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.{exportExt}";
                 var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
 
                 _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
@@ -281,6 +291,10 @@ namespace MFTECmd
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
 
                     _csvWriter = new CsvWriter(swCsv);
+                    if (_fluentCommandLineParser.Object.CsvSeparator == false)
+                    {
+                        _csvWriter.Configuration.Delimiter = "\t";
+                    }
 
                     var foo = _csvWriter.Configuration.AutoMap<MFTRecordOut>();
 
@@ -852,5 +866,7 @@ namespace MFTECmd
 
         public string DumpDir { get; set; }
         public string DumpOffset { get;set; }
+
+        public bool CsvSeparator { get; set; }
     }
 }

@@ -12,6 +12,7 @@ NEW STUFF
 - added --dd and --do switches
 - Added auto decoding of resident data to ASCII (1252) and Unicode when using --de (-f 'D:\SynologyDrive\MFTs\vanko\vanko_MFT' --de 85-21)
 - Cleaned up output of --de so its easier to read
+- added --cs option to allow for tab delimited results
 
 TODO
 - switch -hl to NOT include hard links
