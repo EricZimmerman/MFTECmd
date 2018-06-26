@@ -6,7 +6,7 @@ libz instrument --assembly .\MFTECmd.exe --libz-resources
 (sign exe)
 
 
-NEW STUFF
+NEW STUFF 2.6
 - body file output (NOTE: INDEX_ROOT entries are not included (yet? maybe never))
 - remove msg about -d switch in -f switch
 - added --dd and --do switches
@@ -14,9 +14,3 @@ NEW STUFF
 - Cleaned up output of --de so its easier to read
 - added --cs option to allow for tab delimited results
 
-TODO
-- switch -hl to NOT include hard links
-		.\MFTECmd.exe -f D:\SynologyDrive\MFTs\vanko\vanko_MFT --de 244564-16
-		"main" one is first FILE_NAME attrib of type Windows or DosWindows
-		order FNs by attr type so those go to top?
-		find hard link in vanko and compare to xwf from mft and e01
