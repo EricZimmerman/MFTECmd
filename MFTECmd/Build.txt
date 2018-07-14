@@ -6,11 +6,7 @@ libz instrument --assembly .\MFTECmd.exe --libz-resources
 (sign exe)
 
 
-NEW STUFF 2.6
-- body file output (NOTE: INDEX_ROOT entries are not included (yet? maybe never))
-- remove msg about -d switch in -f switch
-- added --dd and --do switches
-- Added auto decoding of resident data to ASCII (1252) and Unicode when using --de (-f 'D:\SynologyDrive\MFTs\vanko\vanko_MFT' --de 85-21)
-- Cleaned up output of --de so its easier to read
-- added --cs option to allow for tab delimited results
-
+NEW STUFF 2.7
+- Timestomp checks only the Created timestamps
+- dropped last access from usec0 check
+- new option to always include all timestamps (false by default) via --at

@@ -101,6 +101,11 @@ namespace MFTECmd
                 .WithDescription(
                     "When true, use comma instead of tab for field separator. Default is true").SetDefault(true);
 
+            _fluentCommandLineParser.Setup(arg => arg.AllTimeStampsAllTime)
+                .As("at")
+                .WithDescription(
+                    "When true, include all timestamps from 0x30 record vs only when they differ from 0x10 record. Default is false").SetDefault(false);
+
             var header =
                 $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
                 "\r\n\r\nAuthor: Eric Zimmerman (saericzimmerman@gmail.com)" +
@@ -776,22 +781,22 @@ namespace MFTECmd
 
                 mftr.Copied = si.ContentModifiedOn < si.CreatedOn;
 
-                if (fn.FileInfo.CreatedOn != si.CreatedOn)
+                if (_fluentCommandLineParser.Object.AllTimeStampsAllTime|| fn.FileInfo.CreatedOn != si.CreatedOn)
                 {
                     mftr.Created0x30 = fn.FileInfo.CreatedOn;
                 }
 
-                if (fn.FileInfo.ContentModifiedOn != si.ContentModifiedOn)
+                if (_fluentCommandLineParser.Object.AllTimeStampsAllTime|| fn.FileInfo.ContentModifiedOn != si.ContentModifiedOn)
                 {
                     mftr.LastModified0x30 = fn.FileInfo.ContentModifiedOn;
                 }
 
-                if (fn.FileInfo.RecordModifiedOn != si.RecordModifiedOn)
+                if (_fluentCommandLineParser.Object.AllTimeStampsAllTime|| fn.FileInfo.RecordModifiedOn != si.RecordModifiedOn)
                 {
                     mftr.LastRecordChange0x30 = fn.FileInfo.RecordModifiedOn;
                 }
 
-                if (fn.FileInfo.LastAccessedOn != si.LastAccessedOn)
+                if (_fluentCommandLineParser.Object.AllTimeStampsAllTime|| fn.FileInfo.LastAccessedOn != si.LastAccessedOn)
                 {
                     mftr.LastAccess0x30 = fn.FileInfo.LastAccessedOn;
                 }
@@ -800,15 +805,12 @@ namespace MFTECmd
 
                 mftr.SiFlags = si.Flags;
 
-                if (mftr.Created0x30.HasValue && mftr.Created0x10?.UtcTicks < mftr.Created0x30.Value.UtcTicks ||
-                    mftr.LastModified0x30.HasValue &&
-                    mftr.LastModified0x10?.UtcTicks < mftr.LastModified0x30.Value.UtcTicks)
+                if (mftr.Created0x30.HasValue && mftr.Created0x10?.UtcTicks < mftr.Created0x30.Value.UtcTicks)
                 {
                     mftr.Timestomped = true;
                 }
 
-                if (mftr.Created0x10?.Millisecond == 0 || mftr.LastModified0x10?.Millisecond == 0 ||
-                    mftr.LastAccess0x10?.Millisecond == 0)
+                if (mftr.Created0x10?.Millisecond == 0 || mftr.LastModified0x10?.Millisecond == 0)
                 {
                     mftr.uSecZeros = true;
                 }
@@ -868,5 +870,6 @@ namespace MFTECmd
         public string DumpOffset { get;set; }
 
         public bool CsvSeparator { get; set; }
+        public bool AllTimeStampsAllTime { get; set; }
     }
 }
