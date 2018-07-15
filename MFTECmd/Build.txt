@@ -5,8 +5,3 @@ libz instrument --assembly .\MFTECmd.exe --libz-resources
 
 (sign exe)
 
-
-NEW STUFF 2.7
-- Timestomp checks only the Created timestamps
-- dropped last access from usec0 check
-- new option to always include all timestamps (false by default) via --at
