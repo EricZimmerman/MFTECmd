@@ -1,87 +1,26 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
-  <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{6A020DE1-32F3-4E17-B8B1-2D3404347464}</ProjectGuid>
-    <OutputType>Exe</OutputType>
-    <RootNamespace>MFTECmd</RootNamespace>
-    <AssemblyName>MFTECmd</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="MFT">
-      <HintPath>..\Dependencies\MFT.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.VisualBasic" />
-    <Reference Include="System" />
-    <Reference Include="System.Configuration" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.IO.Compression" />
-    <Reference Include="System.Net.Http.WebRequest" />
-    <Reference Include="System.Numerics" />
-    <Reference Include="System.Runtime.Serialization" />
-    <Reference Include="System.ServiceModel" />
-    <Reference Include="System.Transactions" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Xml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="BodyFile.cs" />
-    <Compile Include="MFTRecordOut.cs" />
-    <Compile Include="Program.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Build.txt" />
-    <Content Include="DatabaseSelectRow.ico" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="CsvHelper">
-      <Version>7.1.1</Version>
-    </PackageReference>
-    <PackageReference Include="Exceptionless">
-      <Version>4.3.2004</Version>
-    </PackageReference>
-    <PackageReference Include="FluentCommandLineParser">
-      <Version>1.4.3</Version>
-    </PackageReference>
-    <PackageReference Include="NLog">
-      <Version>4.5.6</Version>
-    </PackageReference>
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+   <PropertyGroup>
+      <OutputType>Exe</OutputType>
+      <TargetFrameworks>net461</TargetFrameworks>
+      <Authors>Eric R. Zimmerman</Authors>
+      <Description>MFTECmd</Description>
+      <AssemblyVersion>0.2.7.0</AssemblyVersion>
+      <FileVersion>0.2.7.0</FileVersion>
+      <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+      <Version>0.2.7.0</Version>
+      <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
+   </PropertyGroup>
+   <ItemGroup>
+      <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
+      <PackageReference Include="NLog" Version="4.5.6" />
+      <PackageReference Include="CsvHelper" Version="7.1.1" />
+      <PackageReference Include="Exceptionless" Version="4.3.2004" />
+      <PackageReference Include="System.Security.Principal.Windows" Version="4.5.0" />
+   </ItemGroup>
+   <ItemGroup>
+      <Reference Include="MFT">
+         <HintPath>..\Dependencies\MFT.dll</HintPath>
+      </Reference>
+   </ItemGroup>
 </Project>
