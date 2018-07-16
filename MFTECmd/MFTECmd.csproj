@@ -1,12 +1,12 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
    <PropertyGroup>
       <OutputType>Exe</OutputType>
       <TargetFrameworks>net461</TargetFrameworks>
       <Authors>Eric R. Zimmerman</Authors>
       <Description>MFTECmd</Description>
-      <AssemblyVersion>0.2.7.0</AssemblyVersion>
-      <FileVersion>0.2.7.0</FileVersion>
+      <AssemblyVersion>0.2.8.0</AssemblyVersion>
+      <FileVersion>0.2.8.0</FileVersion>
       <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
       <Version>0.2.7.0</Version>
       <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
