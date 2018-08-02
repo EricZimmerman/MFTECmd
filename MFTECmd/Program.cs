@@ -64,6 +64,12 @@ namespace MFTECmd
                 .WithDescription(
                     "Drive letter (C, D, etc.) to use with bodyfile formatted results. Only the drive letter itself should be provided\r\n");
 
+            _fluentCommandLineParser.Setup(arg => arg.BaseName)
+                .As("bn")
+                .WithDescription(
+                    "Base name for file when exporting to CSV. If set, this will be the name of the file created in --csv directory\r\n");
+
+
             _fluentCommandLineParser.Setup(arg => arg.DumpDir)
                 .As("dd")
                 .WithDescription(
@@ -73,6 +79,8 @@ namespace MFTECmd
                 .As("do")
                 .WithDescription(
                     "Offset of the FILE record to dumpas decimal or hex. Example: 5120 or 0x1400 Use --de or --vl 1 to see offsets\r\n");
+
+          
 
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
@@ -288,6 +296,11 @@ namespace MFTECmd
 
                 var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.{exportExt}";
                 var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+
+                if (_fluentCommandLineParser.Object.BaseName.IsNullOrEmpty() == false)
+                {
+                    outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, _fluentCommandLineParser.Object.BaseName);
+                }
 
                 _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
 
@@ -865,6 +878,8 @@ namespace MFTECmd
 
         public string BodyDirectory { get; set; }
         public string BodyDriveLetter { get; set; }
+
+        public string BaseName { get; set; }
 
         public string DumpDir { get; set; }
         public string DumpOffset { get;set; }

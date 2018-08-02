@@ -5,11 +5,12 @@
       <TargetFrameworks>net461</TargetFrameworks>
       <Authors>Eric R. Zimmerman</Authors>
       <Description>MFTECmd</Description>
-      <AssemblyVersion>0.2.9.1</AssemblyVersion>
-      <FileVersion>0.2.9.1</FileVersion>
+      <AssemblyVersion>0.3.0.0</AssemblyVersion>
+      <FileVersion>0.3.0.0</FileVersion>
       <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-      <Version>0.2.9.0</Version>
+      <Version>0.3.0.0</Version>
       <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
+      <Copyright>Eric R. Zimmerman</Copyright>
    </PropertyGroup>
    <ItemGroup>
       <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
@@ -22,5 +23,8 @@
       <Reference Include="MFT">
          <HintPath>..\Dependencies\MFT.dll</HintPath>
       </Reference>
+   </ItemGroup>
+   <ItemGroup>
+     <Folder Include="Properties\" />
    </ItemGroup>
 </Project>
