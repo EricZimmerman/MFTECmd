@@ -120,6 +120,7 @@ namespace MFTECmd
                 "\r\nhttps://github.com/EricZimmerman/MFTECmd";
 
             var footer = @"Examples: MFTECmd.exe -f ""C:\Temp\SomeMFT""" + "\r\n\t " +
+                         @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out"" --bn MyOutputFile.csv" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
