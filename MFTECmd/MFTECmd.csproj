@@ -14,7 +14,7 @@
    </PropertyGroup>
    <ItemGroup>
       <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
-      <PackageReference Include="NLog" Version="4.5.7" />
+      <PackageReference Include="NLog" Version="4.5.8" />
       <PackageReference Include="CsvHelper" Version="7.1.1" />
       <PackageReference Include="Exceptionless" Version="4.3.2004" />
       <PackageReference Include="System.Security.Principal.Windows" Version="4.5.0" />
