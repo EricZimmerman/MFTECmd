@@ -1,7 +1,1 @@
 ﻿
-libz add --libz Other.libz --include *.dll --move
-libz inject-libz -assembly .\MFTECmd.exe --libz .\Other.libz --move
-libz instrument --assembly .\MFTECmd.exe --libz-resources
-
-(sign exe)
-
