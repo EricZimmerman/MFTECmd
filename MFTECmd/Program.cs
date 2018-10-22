@@ -17,6 +17,7 @@ using MFT.Other;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using ServiceStack;
 
 namespace MFTECmd
 {
@@ -29,6 +30,7 @@ namespace MFTECmd
 
         private static CsvWriter _bodyWriter;
         private static CsvWriter _csvWriter;
+        private static List<MFTRecordOut> _mftOutRecords;
 
         private static string exportExt = "csv";
 
@@ -49,10 +51,15 @@ namespace MFTECmd
                 .As('f')
                 .WithDescription("File to process. Required\r\n");
 
+            _fluentCommandLineParser.Setup(arg => arg.JsonDirectory)
+                .As("json")
+                .WithDescription(
+                    "Directory to save JSON formatted results to. Be sure to include the full path in double quotes. This or --csv required unless --de or --body is specified");
+
             _fluentCommandLineParser.Setup(arg => arg.CsvDirectory)
                 .As("csv")
                 .WithDescription(
-                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. Required unless --de or --body is specified\r\n");
+                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. This or --json required unless --de or --body is specified\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDirectory)
                 .As("body")
@@ -80,7 +87,6 @@ namespace MFTECmd
                 .WithDescription(
                     "Offset of the FILE record to dumpas decimal or hex. Example: 5120 or 0x1400 Use --de or --vl 1 to see offsets\r\n");
 
-          
 
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
@@ -122,6 +128,7 @@ namespace MFTECmd
             var footer = @"Examples: MFTECmd.exe -f ""C:\Temp\SomeMFT""" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out"" --bn MyOutputFile.csv" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
+                         @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --json ""c:\temp\jsonout""" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
                          @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
                          "\r\n\t" +
@@ -148,7 +155,7 @@ namespace MFTECmd
                 return;
             }
 
-            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty())
+            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty() )
             {
                 _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
@@ -156,7 +163,7 @@ namespace MFTECmd
                 return;
             }
 
-            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty() == false &&
+            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty()  == false &&
                 !File.Exists(_fluentCommandLineParser.Object.File))
             {
                 _logger.Warn($"File '{_fluentCommandLineParser.Object.File}' not found. Exiting");
@@ -164,13 +171,14 @@ namespace MFTECmd
             }
 
             if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
+                _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() &&
                 _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() &&
                 _fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty()&&
                 _fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty())
             {
                 _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
-                _logger.Warn("--csv, --body, --dd, or --de is required. Exiting");
+                _logger.Warn("--csv, --json, --body, --dd, or --de is required. Exiting");
                 return;
             }
 
@@ -286,26 +294,32 @@ namespace MFTECmd
                 }
             }
 
-            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+            if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
             {
-                if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                _mftOutRecords = new List<MFTRecordOut>();
+            }
+
+            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false || _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+            {
+                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
                 {
-                    _logger.Warn(
-                        $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
-                    Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
-                }
+                    if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                    {
+                        _logger.Warn(
+                            $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                        Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                    }
 
-                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.{exportExt}";
-                var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.{exportExt}";
+                    var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
 
-                if (_fluentCommandLineParser.Object.BaseName.IsNullOrEmpty() == false)
-                {
-                    outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, _fluentCommandLineParser.Object.BaseName);
-                }
+                    if (UsefulExtension.IsNullOrEmpty(_fluentCommandLineParser.Object.BaseName) == false)
+                    {
+                        outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, _fluentCommandLineParser.Object.BaseName);
+                    }
 
-                _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
-
-                try
+                    _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
+                    try
                 {
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
 
@@ -385,14 +399,18 @@ namespace MFTECmd
                         $"\r\nError setting up CSV export. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
                     _csvWriter = null;
                 }
+
+                }
+                
             }
 
-            if (swBody != null || swCsv != null)
+            if (swBody != null || swCsv != null || _mftOutRecords!= null)
             {
                 try
                 {
                     ProcessRecords(_mft.FileRecords);
                     ProcessRecords(_mft.FreeFileRecords);
+                    
                 }
                 catch (Exception ex)
                 {
@@ -407,11 +425,41 @@ namespace MFTECmd
             swBody?.Flush();
             swBody?.Close();
 
+            if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+            {
+                //write json
+                
+                var outBase = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.json";
+
+                if (Directory.Exists(_fluentCommandLineParser.Object.JsonDirectory) == false)
+                {
+                    _logger.Warn(
+                        $"Path to '{_fluentCommandLineParser.Object.JsonDirectory}' doesn't exist. Creating...");
+                    Directory.CreateDirectory(_fluentCommandLineParser.Object.JsonDirectory);
+                }
+                        
+                var outFile = Path.Combine(_fluentCommandLineParser.Object.JsonDirectory, outBase);
+
+                _logger.Warn($"\r\nJSON output will be saved to '{outFile}'");
+
+                try
+                {
+                    File.WriteAllText(outFile,_mftOutRecords.ToJson());
+                }
+                catch (Exception e)
+                {
+                    _logger.Error(
+                        $"\r\nError exporting to JSON. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
+                }
+
+                
+
+            }
        
 
             #region ExportRecord
 
-            if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty() == false)
+            if (UsefulExtension.IsNullOrEmpty(_fluentCommandLineParser.Object.DumpDir) == false)
             {
                 _logger.Info("");
 
@@ -456,7 +504,7 @@ namespace MFTECmd
 
             #region DumpEntry
 
-            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() == false)
+            if (UsefulExtension.IsNullOrEmpty(_fluentCommandLineParser.Object.DumpEntry) == false)
             {
                 _logger.Info("");
 
@@ -556,6 +604,9 @@ namespace MFTECmd
                     mftr.HasAds = ads.Any();
 
                     _csvWriter?.WriteRecord(mftr);
+
+                    _mftOutRecords?.Add(mftr);
+
                     _csvWriter?.NextRecord();
 
                     if (_bodyWriter != null)
@@ -577,6 +628,9 @@ namespace MFTECmd
                         var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
                         adsRecord.IsAds = true;
                         _csvWriter?.WriteRecord(adsRecord);
+
+                        _mftOutRecords?.Add(adsRecord);
+
                         _csvWriter?.NextRecord();
 
                         if (_bodyWriter != null)
@@ -872,6 +926,7 @@ namespace MFTECmd
     {
         public string File { get; set; }
         public string CsvDirectory { get; set; }
+        public string JsonDirectory { get; set; }
         public string DateTimeFormat { get; set; }
         public bool IncludeShortNames { get; set; }
         public string DumpEntry { get; set; }

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MFTECmd": {
+      "commandName": "Project",
+      "commandLineArgs": "-f D:\\Temp\\MFT --json C:\\Temp\\"
+    }
+  }
+}
