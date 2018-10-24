@@ -54,44 +54,43 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.JsonDirectory)
                 .As("json")
                 .WithDescription(
-                    "Directory to save JSON formatted results to. Be sure to include the full path in double quotes. This or --csv required unless --de or --body is specified");
+                    "Directory to save JSON formatted results to. This or --csv required unless --de or --body is specified");
 
             _fluentCommandLineParser.Setup(arg => arg.CsvDirectory)
                 .As("csv")
                 .WithDescription(
-                    "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. This or --json required unless --de or --body is specified\r\n");
+                    "Directory to save CSV formatted results to. This or --json required unless --de or --body is specified\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDirectory)
                 .As("body")
                 .WithDescription(
-                    "Directory to save bodyfile formatted results to. Be sure to include the full path in double quotes. --bdl is also required when using this option");
+                    "Directory to save bodyfile formatted results to. --bdl is also required when using this option");
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDriveLetter)
                 .As("bdl")
                 .WithDescription(
-                    "Drive letter (C, D, etc.) to use with bodyfile formatted results. Only the drive letter itself should be provided\r\n");
+                    "Drive letter (C, D, etc.) to use with bodyfile. Only the drive letter itself should be provided\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.BaseName)
                 .As("bn")
                 .WithDescription(
-                    "Base name for file when exporting to CSV. If set, this will be the name of the file created in --csv directory\r\n");
+                    "Base name for file when exporting to CSV. If set, this is the name of the file created in --csv directory\r\n");
 
 
             _fluentCommandLineParser.Setup(arg => arg.DumpDir)
                 .As("dd")
                 .WithDescription(
-                    "Directory to save exported FILE record. Be sure to include the full path in double quotes. --do is also required when using this option");
+                    "Directory to save exported FILE record. --do is also required when using this option");
 
             _fluentCommandLineParser.Setup(arg => arg.DumpOffset)
                 .As("do")
                 .WithDescription(
-                    "Offset of the FILE record to dumpas decimal or hex. Example: 5120 or 0x1400 Use --de or --vl 1 to see offsets\r\n");
-
+                    "Offset of the FILE record to dump as decimal or hex. Ex: 5120 or 0x1400 Use --de or --vl 1 to see offsets\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
                 .WithDescription(
-                    "Dump full details for the entry/sequence number provided. Format is 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5\r\n")
+                    "Dump full details for entry/sequence #. Format is 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5\r\n")
                 .SetDefault(string.Empty);
 
             _fluentCommandLineParser.Setup(arg => arg.DateTimeFormat)
@@ -103,7 +102,7 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.IncludeShortNames)
                 .As("sn")
                 .WithDescription(
-                    "Include DOS file name types. Default is false").SetDefault(false);
+                    "Include DOS file name types. Default is FALSE").SetDefault(false);
 
             _fluentCommandLineParser.Setup(arg => arg.Verbose)
                 .As("vl")
@@ -113,12 +112,12 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.CsvSeparator)
                 .As("cs")
                 .WithDescription(
-                    "When true, use comma instead of tab for field separator. Default is true").SetDefault(true);
+                    "When true, use comma instead of tab for field separator. Default is TRUE").SetDefault(true);
 
             _fluentCommandLineParser.Setup(arg => arg.AllTimeStampsAllTime)
                 .As("at")
                 .WithDescription(
-                    "When true, include all timestamps from 0x30 record vs only when they differ from 0x10 record. Default is false").SetDefault(false);
+                    "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10. Default is FALSE").SetDefault(false);
 
             var header =
                 $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
