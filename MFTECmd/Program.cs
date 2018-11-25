@@ -32,7 +32,6 @@ namespace MFTECmd
         private static CsvWriter _csvWriter;
         private static List<MFTRecordOut> _mftOutRecords;
 
-        private static string exportExt = "csv";
 
         private static void Main(string[] args)
         {
@@ -59,7 +58,13 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.CsvDirectory)
                 .As("csv")
                 .WithDescription(
-                    "Directory to save CSV formatted results to. This or --json required unless --de or --body is specified\r\n");
+                    "Directory to save CSV formatted results to. This or --json required unless --de or --body is specified");
+            
+            _fluentCommandLineParser.Setup(arg => arg.CsvName)
+                .As("csvf")
+                .WithDescription(
+                    "File name to save CSV formatted results to. When present, overrides default name\r\n");
+
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDirectory)
                 .As("body")
@@ -70,11 +75,6 @@ namespace MFTECmd
                 .As("bdl")
                 .WithDescription(
                     "Drive letter (C, D, etc.) to use with bodyfile. Only the drive letter itself should be provided\r\n");
-
-            _fluentCommandLineParser.Setup(arg => arg.BaseName)
-                .As("bn")
-                .WithDescription(
-                    "Base name for file when exporting to CSV. If set, this is the name of the file created in --csv directory\r\n");
 
 
             _fluentCommandLineParser.Setup(arg => arg.DumpDir)
@@ -198,10 +198,7 @@ namespace MFTECmd
                 return;
             }
 
-            if (_fluentCommandLineParser.Object.CsvSeparator == false)
-            {
-                exportExt = "tsv";
-            }
+      
 
             _logger.Info(header);
             _logger.Info("");
@@ -308,13 +305,14 @@ namespace MFTECmd
                         Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                     }
 
-                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.{exportExt}";
-                    var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.csv";
 
-                    if (UsefulExtension.IsNullOrEmpty(_fluentCommandLineParser.Object.BaseName) == false)
+                    if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
                     {
-                        outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, _fluentCommandLineParser.Object.BaseName);
+                        outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
                     }
+
+                    var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
 
                     _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
                     try
@@ -933,7 +931,7 @@ namespace MFTECmd
         public string BodyDirectory { get; set; }
         public string BodyDriveLetter { get; set; }
 
-        public string BaseName { get; set; }
+        public string CsvName { get; set; }
 
         public string DumpDir { get; set; }
         public string DumpOffset { get;set; }
