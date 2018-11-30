@@ -16,5 +16,6 @@ namespace MFTECmd
 
         public string UpdateReasons { get; set; }
         public string FileAttributes { get; set; }
+        public long OffsetToData { get; set; }
     }
 }

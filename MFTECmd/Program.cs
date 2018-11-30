@@ -240,6 +240,15 @@ namespace MFTECmd
                     return;
                     break;
                 case FileType.UsnJournal:
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty()
+                        )
+                    {
+                        _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+
+                        _logger.Warn("--csv is required. Exiting");
+                        return;
+                    }
+
                     ProcessJ();
                     break;
                 case FileType.Boot:
@@ -427,7 +436,8 @@ namespace MFTECmd
 
                         UpdateSequenceNumber = jUsnEntry.UpdateSequenceNumber,
                         UpdateReasons = jUsnEntry.UpdateReasons.ToString().Replace(", ", "|"),
-                        FileAttributes = jUsnEntry.FileAttributes.ToString().Replace(", ", "|")
+                        FileAttributes = jUsnEntry.FileAttributes.ToString().Replace(", ", "|"),
+                        OffsetToData = jUsnEntry.OffsetToData
                     };
 
                     _csvWriter.WriteRecord(jout);
