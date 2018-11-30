@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MFTECmd
+﻿namespace MFTECmd
 {
-  public  class BodyFile
+    public class BodyFile
     {
         public int Md5 { get; set; }
         public string Name { get; set; }
@@ -19,7 +13,5 @@ namespace MFTECmd
         public long ModifiedTime { get; set; }
         public long RecordModifiedTime { get; set; }
         public long CreatedTime { get; set; }
-        
-
     }
 }
