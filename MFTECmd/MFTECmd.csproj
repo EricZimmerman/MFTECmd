@@ -23,7 +23,7 @@
      <DebugSymbols>true</DebugSymbols>
    </PropertyGroup>
    <ItemGroup>
-      <PackageReference Include="Costura.Fody" Version="3.1.6" />
+      <PackageReference Include="Costura.Fody" Version="3.2.0" />
       <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
       <PackageReference Include="NLog" Version="4.5.11" />
       <PackageReference Include="CsvHelper" Version="9.2.3" />
@@ -32,8 +32,14 @@
       <PackageReference Include="System.Security.Principal.Windows" Version="4.5.1" />
    </ItemGroup>
    <ItemGroup>
+      <Reference Include="Boot">
+        <HintPath>..\Dependencies\Boot.dll</HintPath>
+      </Reference>
       <Reference Include="MFT">
          <HintPath>..\Dependencies\MFT.dll</HintPath>
+      </Reference>
+      <Reference Include="Usn">
+        <HintPath>..\Dependencies\Usn.dll</HintPath>
       </Reference>
    </ItemGroup>
    <ItemGroup>

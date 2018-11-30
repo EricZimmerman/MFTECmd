@@ -7,7 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Principal;
 using System.Text;
-using CsvHelper;
+using Boot;
 using Exceptionless;
 using Fclp;
 using Fclp.Internals.Extensions;
@@ -18,6 +18,9 @@ using NLog;
 using NLog.Config;
 using NLog.Targets;
 using ServiceStack;
+using ServiceStack.Text;
+using Usn;
+using CsvWriter = CsvHelper.CsvWriter;
 
 namespace MFTECmd
 {
@@ -48,7 +51,7 @@ namespace MFTECmd
 
             _fluentCommandLineParser.Setup(arg => arg.File)
                 .As('f')
-                .WithDescription("File to process. Required\r\n");
+                .WithDescription("File to process ($MFT | $J | $LogFile | $Boot | $SDS). Required\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.JsonDirectory)
                 .As("json")
@@ -168,37 +171,7 @@ namespace MFTECmd
                 return;
             }
 
-            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
-                _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() &&
-                _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() &&
-                _fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty()&&
-                _fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty())
-            {
-                _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
-
-                _logger.Warn("--csv, --json, --body, --dd, or --de is required. Exiting");
-                return;
-            }
-
-            if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false &&
-                _fluentCommandLineParser.Object.BodyDriveLetter.IsNullOrEmpty())
-            {
-                _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
-
-                _logger.Warn("--bdl is required when using --body. Exiting");
-                return;
-            }
-
-            if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty() == false &&
-                _fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty())
-            {
-                _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
-
-                _logger.Warn("--do is required when using --dd. Exiting");
-                return;
-            }
-
-      
+           
 
             _logger.Info(header);
             _logger.Info("");
@@ -221,9 +194,273 @@ namespace MFTECmd
 
             LogManager.ReconfigExistingLoggers();
 
+         
+
+            //determine file type
+            var ft = GetFileType(_fluentCommandLineParser.Object.File);
+            _logger.Warn($"File type: {ft}\r\n");
+
+            switch (ft)
+            {
+                case FileType.Mft:
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
+                        _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() &&
+                        _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() &&
+                        _fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty()&&
+                        _fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty())
+                    {
+                        _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+
+                        _logger.Warn("--csv, --json, --body, --dd, or --de is required. Exiting");
+                        return;
+                    }
+
+                    if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false &&
+                        _fluentCommandLineParser.Object.BodyDriveLetter.IsNullOrEmpty())
+                    {
+                        _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+
+                        _logger.Warn("--bdl is required when using --body. Exiting");
+                        return;
+                    }
+
+                    if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty() == false &&
+                        _fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty())
+                    {
+                        _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+
+                        _logger.Warn("--do is required when using --dd. Exiting");
+                        return;
+                    }
+
+                    ProcessMft();
+                    break;
+                case FileType.LogFile:
+                    _logger.Warn("$LogFile not supported yet. Exiting");
+                    return;
+                    break;
+                case FileType.UsnJournal:
+                    ProcessJ();
+                    break;
+                case FileType.Boot:
+                    ProcessBoot();
+                    break;
+                case FileType.Sds:
+                    _logger.Warn("$SDS not supported yet. Exiting");
+                    return;
+                    break;
+                
+                default:
+                    //unknown
+                    _logger.Error($"Unknown file type! Send '{_fluentCommandLineParser.Object.File}' to saericzimmerman@gmail.com for assistance. Exiting");
+                return;
+            }
+
+        }
+
+        private static void ProcessBoot()
+        {
             var sw = new Stopwatch();
             sw.Start();
+            try
+            {
+                var b  = BootFile.Load(_fluentCommandLineParser.Object.File);
 
+                sw.Stop();
+
+                _logger.Info(
+                    $"Processed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
+
+                _logger.Info($"Boot entry point: {b.BootEntryPoint}");
+                _logger.Info($"File system signature: {b.FileSystemSignature}");
+                _logger.Info($"\r\nBytes per sector: {b.BytesPerSector:N0}");
+                _logger.Info($"Sectors per cluster: {b.SectorsPerCluster:N0}");
+                _logger.Info($"Cluster size: {b.BytesPerSector * b.SectorsPerCluster:N0}");
+                _logger.Info($"\r\nTotal sectors: {b.TotalSectors:N0}");
+                _logger.Info($"Reserved sectors: {b.ReservedSectors:N0}");
+                _logger.Info($"\r\n$MFT cluster block #: {b.MftClusterBlockNumber:N0}");
+                _logger.Info($"$MFTMirr cluster block #: {b.MirrorMftClusterBlockNumber:N0}");
+                _logger.Info($"\r\nFILE entry size: {b.MftEntrySize:N0}");
+                _logger.Info($"Index entry size: {b.IndexEntrySize:N0}");
+                _logger.Info($"\r\nVolume serial number raw: 0x{b.VolumeSerialNumberRaw:X}");
+                _logger.Info($"Volume serial number: {b.GetVolumeSerialNumber()}");
+                _logger.Info($"Volume serial number 32-bit: {b.GetVolumeSerialNumber(true)}");
+                _logger.Info($"Volume serial number 32-bit reversed: {b.GetVolumeSerialNumber(true,true)}");
+                _logger.Info($"\r\nSector signature: {b.GetSectorSignature()}");
+
+                _logger.Trace(b.Dump);
+
+                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+                {
+
+                StreamWriter swCsv = null;
+
+                if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                {
+                    _logger.Warn(
+                        $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                    Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                }
+
+                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
+
+                if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                {
+                    outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                }
+
+                var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+
+                _logger.Warn($"\r\nCSV output will be saved to '{outFile}'\r\n");
+              
+                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+
+                    _csvWriter = new CsvWriter(swCsv);
+                    if (_fluentCommandLineParser.Object.CsvSeparator == false)
+                    {
+                        _csvWriter.Configuration.Delimiter = "\t";
+                    }
+
+                    var foo = _csvWriter.Configuration.AutoMap<BootOut>();
+
+                _csvWriter.Configuration.RegisterClassMap(foo);
+                _csvWriter.WriteHeader<BootOut>();
+                _csvWriter.NextRecord();
+
+                var bo = new BootOut
+                {
+                    EntryPoint = b.BootEntryPoint,
+                    Signature = b.FileSystemSignature,
+                    BytesPerSector = b.BytesPerSector,
+                    SectorsPerCluster = b.SectorsPerCluster,
+                    ReservedSectors = b.ReservedSectors,
+                    TotalSectors = b.TotalSectors,
+                    MftClusterBlockNumber = b.MftClusterBlockNumber,
+                    MftMirrClusterBlockNumber = b.MirrorMftClusterBlockNumber,
+                    MftEntrySize = b.MftEntrySize,
+                    IndexEntrySize = b.IndexEntrySize,
+                    VolumeSerialNumberRaw = $"0x{b.VolumeSerialNumberRaw:X}",
+                    VolumeSerialNumber = b.GetVolumeSerialNumber(),
+                    VolumeSerialNumber32 = b.GetVolumeSerialNumber(true),
+                    VolumeSerialNumber32Reverse = b.GetVolumeSerialNumber(true, true),
+                    SectorSignature = b.GetSectorSignature()
+                };
+
+
+                _csvWriter.WriteRecord(bo);
+                _csvWriter.NextRecord();
+                
+                swCsv.Flush();
+                swCsv.Close();
+                }
+
+
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                return;
+            }
+
+         
+
+        }
+
+        private static void ProcessJ()
+        {
+            var sw = new Stopwatch();
+            sw.Start();
+            try
+            {
+                var j  = UsnFile.Load(_fluentCommandLineParser.Object.File);
+
+                _logger.Info($"Usn entries found: {j.UsnEntries.Count:N0}");
+
+                sw.Stop();
+
+                _logger.Info(
+                    $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
+
+
+                StreamWriter swCsv = null;
+
+                if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                {
+                    _logger.Warn(
+                        $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                    Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                }
+
+                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
+
+                if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                {
+                    outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                }
+
+                var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+
+                _logger.Warn($"\r\nCSV output will be saved to '{outFile}'\r\n");
+              
+                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+
+                    _csvWriter = new CsvWriter(swCsv);
+                    if (_fluentCommandLineParser.Object.CsvSeparator == false)
+                    {
+                        _csvWriter.Configuration.Delimiter = "\t";
+                    }
+
+                    var foo = _csvWriter.Configuration.AutoMap<JEntryOut>();
+
+                    foo.Map(t => t.UpdateTimestamp).ConvertUsing(t =>
+                        $"{t.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+
+                    _csvWriter.Configuration.RegisterClassMap(foo);
+
+                    _csvWriter.WriteHeader<JEntryOut>();
+                    _csvWriter.NextRecord();
+
+                foreach (var jUsnEntry in j.UsnEntries)
+                {
+                    var jout = new JEntryOut
+                    {
+                        Name = jUsnEntry.Name,
+                        UpdateTimestamp = jUsnEntry.UpdateTimestamp,
+                        EntryNumber = jUsnEntry.FileReference.EntryNumber,
+                        SequenceNumber = jUsnEntry.FileReference.SequenceNumber,
+
+                        ParentEntryNumber = jUsnEntry.ParentFileReference.EntryNumber,
+                        ParentSequenceNumber = jUsnEntry.ParentFileReference.SequenceNumber,
+
+                        UpdateSequenceNumber = jUsnEntry.UpdateSequenceNumber,
+                        UpdateReasons = jUsnEntry.UpdateReasons.ToString().Replace(", ", "|"),
+                        FileAttributes = jUsnEntry.FileAttributes.ToString().Replace(", ", "|")
+                    };
+
+                    _csvWriter.WriteRecord(jout);
+                    _csvWriter.NextRecord();
+                }
+
+                swCsv.Flush();
+                swCsv.Close();
+
+               
+
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                return;
+            }
+
+          
+
+        }
+
+        private static void ProcessMft()
+        {
+            var sw = new Stopwatch();
+            sw.Start();
             try
             {
                 _mft = MftFile.Load(_fluentCommandLineParser.Object.File);
@@ -237,8 +474,8 @@ namespace MFTECmd
             sw.Stop();
 
             _logger.Info(
-                $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
-
+                $"Processed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
+         
             StreamWriter swBody = null;
             StreamWriter swCsv = null;
 
@@ -305,7 +542,7 @@ namespace MFTECmd
                         Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                     }
 
-                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.csv";
+                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.csv";
 
                     if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
                     {
@@ -314,7 +551,7 @@ namespace MFTECmd
 
                     var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
 
-                    _logger.Warn($"\r\nCSV output will be saved to '{outFile}'");
+                    _logger.Warn($"CSV output will be saved to '{outFile}'\r\n");
                     try
                 {
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
@@ -448,8 +685,6 @@ namespace MFTECmd
                         $"\r\nError exporting to JSON. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
                 }
 
-                
-
             }
        
 
@@ -565,6 +800,64 @@ namespace MFTECmd
             }
 
             #endregion
+
+           
+
+        }
+
+        private static FileType GetFileType(string file)
+        {
+
+            const int logFileSig = 0x52545352;
+            const int mftSig = 0x454C4946;
+            const int sdsSig = 0x32FEC6CB;
+            const int bootSig = 0x5346544E;
+
+            using (var br = new BinaryReader(new FileStream(file, FileMode.Open) ))
+            {
+                var buff = br.ReadBytes(8);
+
+                var sig32 = BitConverter.ToInt32(buff, 0);
+
+                switch (sig32)
+                {
+                        case logFileSig:
+                            return FileType.LogFile;
+                        
+                        case mftSig:
+                            return FileType.Mft;
+                    case sdsSig:
+                        return FileType.Sds;
+
+                    case 0x0:
+                    case 0x60:
+                    case 0x90:
+                        //00 for sparse, 60 and 90 for common record sizes
+                        return FileType.UsnJournal;
+
+                        default:
+                            var isBootSig = BitConverter.ToInt32(buff, 3);
+                            if (isBootSig == bootSig)
+                            {
+                                return FileType.Boot;
+                            }
+                            break;
+                }
+
+
+            }
+
+            return FileType.Unknown;
+        }
+
+        private enum FileType
+        {
+            Mft = 0,
+            LogFile = 1,
+            UsnJournal = 2,
+            Boot = 3,
+            Sds = 4,
+            Unknown = 99
         }
 
         private static void ProcessRecords(Dictionary<string, FileRecord> records)
