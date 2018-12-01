@@ -802,18 +802,25 @@ namespace MFTECmd
             const int sdsSig = 0x32FEC6CB;
             const int bootSig = 0x5346544E;
 
-            using (var br = new BinaryReader(new FileStream(file, FileMode.Open)))
+          
+            _logger.Trace($"Opening '{file}' and checking header");
+            using (var br = new BinaryReader(new FileStream(file, FileMode.Open,FileAccess.Read)))
             {
-                var buff = br.ReadBytes(8);
+                var buff = br.ReadBytes(50);
+                _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
 
                 var sig32 = BitConverter.ToInt32(buff, 0);
+
+                _logger.Debug($"Sig32: 0x{sig32:X}");
 
                 switch (sig32)
                 {
                     case logFileSig:
+                        _logger.Debug("Found $LogFile sig");
                         return FileType.LogFile;
 
                     case mftSig:
+                        _logger.Debug("Found $MFT sig");
                         return FileType.Mft;
                     case sdsSig:
                         return FileType.Sds;
@@ -822,12 +829,14 @@ namespace MFTECmd
                     case 0x60:
                     case 0x90:
                         //00 for sparse, 60 and 90 for common record sizes
+                        _logger.Debug("Found $J sig");
                         return FileType.UsnJournal;
 
                     default:
                         var isBootSig = BitConverter.ToInt32(buff, 3);
                         if (isBootSig == bootSig)
                         {
+                            _logger.Debug("Found $Boot sig");
                             return FileType.Boot;
                         }
 
@@ -835,6 +844,7 @@ namespace MFTECmd
                 }
             }
 
+            _logger.Debug("Failed to find a signature! Returning unknown");
             return FileType.Unknown;
         }
 
