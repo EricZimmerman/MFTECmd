@@ -17,6 +17,7 @@ using MFT.Other;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using SDS;
 using ServiceStack;
 using ServiceStack.Text;
 using Usn;
@@ -255,8 +256,16 @@ namespace MFTECmd
                     ProcessBoot();
                     break;
                 case FileType.Sds:
-                    _logger.Warn("$SDS not supported yet. Exiting");
-                    return;
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty()
+                    )
+                    {
+                        _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+
+                        _logger.Warn("--csv is required. Exiting");
+                        return;
+                    }
+
+                    ProcessSds();
                     break;
 
                 default:
@@ -383,7 +392,6 @@ namespace MFTECmd
                 _logger.Info(
                     $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
 
-
                 StreamWriter swCsv = null;
 
                 if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
@@ -424,7 +432,7 @@ namespace MFTECmd
 
                 foreach (var jUsnEntry in j.UsnEntries)
                 {
-                    var jout = new JEntryOut
+                    var jOut = new JEntryOut
                     {
                         Name = jUsnEntry.Name,
                         UpdateTimestamp = jUsnEntry.UpdateTimestamp,
@@ -440,7 +448,86 @@ namespace MFTECmd
                         OffsetToData = jUsnEntry.OffsetToData
                     };
 
-                    _csvWriter.WriteRecord(jout);
+                    _csvWriter.WriteRecord(jOut);
+                    _csvWriter.NextRecord();
+                }
+
+                swCsv.Flush();
+                swCsv.Close();
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"There was an error loading the file! Error: {e.Message}");
+            }
+        }
+
+         private static void ProcessSds()
+        {
+            var sw = new Stopwatch();
+            sw.Start();
+            try
+            {
+                var sds = SdsFile.Load(_fluentCommandLineParser.Object.File);
+
+                _logger.Info($"SDS entries found: {sds.SdsEntries.Count:N0}");
+
+                sw.Stop();
+
+                _logger.Info(
+                    $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
+
+                StreamWriter swCsv = null;
+
+                if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                {
+                    _logger.Warn(
+                        $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                    Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                }
+
+                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
+
+                if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                {
+                    outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                }
+
+                var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+
+                _logger.Warn($"\r\nCSV output will be saved to '{outFile}'\r\n");
+
+                swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+
+                _csvWriter = new CsvWriter(swCsv);
+                if (_fluentCommandLineParser.Object.CsvSeparator == false)
+                {
+                    _csvWriter.Configuration.Delimiter = "\t";
+                }
+
+                var foo = _csvWriter.Configuration.AutoMap<SdsOut>();
+
+//                foo.Map(t => t.UpdateTimestamp).ConvertUsing(t =>
+//                    $"{t.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+
+                _csvWriter.Configuration.RegisterClassMap(foo);
+
+                _csvWriter.WriteHeader<SdsOut>();
+                _csvWriter.NextRecord();
+
+                foreach (var sdsEntry in sds.SdsEntries)
+                {
+                    var sdO = new SdsOut
+                    {
+                        Hash = sdsEntry.Hash,
+                        Id = sdsEntry.Id,
+                        Offset = sdsEntry.Offset,
+                        OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
+                        GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
+                    };
+
+                    _logger.Trace(sdsEntry.SecurityDescriptor);
+
+                    _csvWriter.WriteRecord(sdO);
                     _csvWriter.NextRecord();
                 }
 
@@ -811,6 +898,10 @@ namespace MFTECmd
 
                 var sig32 = BitConverter.ToInt32(buff, 0);
 
+                //some usn checks
+                var majorVer = BitConverter.ToInt16(buff, 4);
+                var minorVer = BitConverter.ToInt16(buff, 6);
+
                 _logger.Debug($"Sig32: 0x{sig32:X}");
 
                 switch (sig32)
@@ -826,11 +917,15 @@ namespace MFTECmd
                         return FileType.Sds;
 
                     case 0x0:
-                    case 0x60:
-                    case 0x90:
-                        //00 for sparse, 60 and 90 for common record sizes
-                        _logger.Debug("Found $J sig");
-                        return FileType.UsnJournal;
+                        //00 for sparse file
+
+                        if (majorVer ==  0 && minorVer == 0)
+                        {
+                            _logger.Debug("Found $J sig (0 size) and major/minor == 0");
+                            return FileType.UsnJournal;
+                        }
+
+                        return FileType.Unknown;
 
                     default:
                         var isBootSig = BitConverter.ToInt32(buff, 3);
@@ -838,6 +933,12 @@ namespace MFTECmd
                         {
                             _logger.Debug("Found $Boot sig");
                             return FileType.Boot;
+                        }
+                        
+                        if (majorVer == 2 && minorVer == 0)
+                        {
+                            _logger.Debug("Found $J sig (Major == 2, Minor == 0");
+                            return FileType.UsnJournal;
                         }
 
                         break;

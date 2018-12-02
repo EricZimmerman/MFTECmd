@@ -38,6 +38,9 @@
       <Reference Include="MFT">
          <HintPath>..\Dependencies\MFT.dll</HintPath>
       </Reference>
+      <Reference Include="Secure">
+        <HintPath>..\Dependencies\Secure.dll</HintPath>
+      </Reference>
       <Reference Include="Usn">
         <HintPath>..\Dependencies\Usn.dll</HintPath>
       </Reference>
