@@ -23,6 +23,7 @@ using ServiceStack.Text;
 using Usn;
 using CsvWriter = CsvHelper.CsvWriter;
 
+
 namespace MFTECmd
 {
     internal class Program
@@ -94,7 +95,13 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
                 .WithDescription(
-                    "Dump full details for entry/sequence #. Format is 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5\r\n")
+                    "Dump full details for entry/sequence #. Format is 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5")
+                .SetDefault(string.Empty);
+
+            _fluentCommandLineParser.Setup(arg => arg.DumpSecurity)
+                .As("ds")
+                .WithDescription(
+                    "Dump full details for Security Id as decimal or hex. Example: 624 or 0x270\r\n")
                 .SetDefault(string.Empty);
 
             _fluentCommandLineParser.Setup(arg => arg.DateTimeFormat)
@@ -256,12 +263,12 @@ namespace MFTECmd
                     ProcessBoot();
                     break;
                 case FileType.Sds:
-                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty()
-                    )
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() && _fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty())
+                    
                     {
                         _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
-                        _logger.Warn("--csv is required. Exiting");
+                        _logger.Warn("--csv or --ds is required. Exiting");
                         return;
                     }
 
@@ -476,6 +483,9 @@ namespace MFTECmd
                 _logger.Info(
                     $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
 
+                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+                {
+
                 StreamWriter swCsv = null;
 
                 if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
@@ -523,7 +533,33 @@ namespace MFTECmd
                         Offset = sdsEntry.Offset,
                         OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
                         GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
+                        Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ","|"),
+                        FileOffset = sdsEntry.FileOffset
                     };
+
+                    if (sdsEntry.SecurityDescriptor.Sacl != null)
+                    {
+                        sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
+                     var uniqueAce = new HashSet<string>();
+                        foreach (var saclAceRecord in sdsEntry.SecurityDescriptor.Sacl.AceRecords)
+                        {
+                            uniqueAce.Add(saclAceRecord.AceType.ToString());
+                        }
+
+                        sdO.UniqueSaclAceTypes = string.Join("|", uniqueAce);
+                    }
+
+                    if (sdsEntry.SecurityDescriptor.Dacl != null)
+                    {
+                        sdO.DaclAceCount = sdsEntry.SecurityDescriptor.Dacl.AceCount;
+                        var uniqueAce = new HashSet<string>();
+                        foreach (var daclAceRecord in sdsEntry.SecurityDescriptor.Dacl.AceRecords)
+                        {
+                            uniqueAce.Add(daclAceRecord.AceType.ToString());
+                        }
+
+                        sdO.UniqueDaclAceTypes = string.Join("|", uniqueAce);
+                    }
 
                     _logger.Trace(sdsEntry.SecurityDescriptor);
 
@@ -533,10 +569,117 @@ namespace MFTECmd
 
                 swCsv.Flush();
                 swCsv.Close();
+                }
+
+                if (_fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty() == false)
+                {
+                    var valOk = false;
+                    int secId;
+
+                    if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                    {
+                        var rawNum = _fluentCommandLineParser.Object.DumpSecurity.Replace("0x", "");
+                        
+
+                        valOk = int.TryParse(rawNum, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out secId);
+                        
+                    }
+                    else
+                    {
+                        valOk = int.TryParse(_fluentCommandLineParser.Object.DumpSecurity, out secId);
+                        
+                    }
+
+                    if (valOk == false)
+                    {
+                        _logger.Warn(
+                            $"Could not parse '{_fluentCommandLineParser.Object.DumpSecurity}' to valid value. Exiting");
+                        return;
+                    }
+
+                    var sd = sds.SdsEntries.FirstOrDefault((t => t.Id == secId));
+
+                    if (sd == null)
+                    {
+                        _logger.Warn($"Could not find entry with Id: {secId}");
+                        return;
+                    }
+
+                    _logger.Info("");
+                    _logger.Fatal($"Details for security record # {sd.Id} (0x{sd.Id:X})");
+                    _logger.Info($"Hash value: {sd.Hash}, Offset: 0x{sd.Offset:X}");
+                    _logger.Info($"Control flags: {sd.SecurityDescriptor.Control.ToString().Replace(", "," | ")}");
+                    _logger.Info("");
+
+
+                    if (sd.SecurityDescriptor.OwnerSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
+                    {
+                        _logger.Info($"SID: {sd.SecurityDescriptor.OwnerSid}");
+                    }
+                    else
+                    {
+                        _logger.Info($"SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.OwnerSidType)}");
+                    }
+
+                    if (sd.SecurityDescriptor.GroupSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
+                    {
+                        _logger.Info($"Group SID: {sd.SecurityDescriptor.GroupSid}");
+                    }
+                    else
+                    {
+                        _logger.Info($"Group SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.GroupSidType)}");
+                    }
+
+
+
+                   
+                    if (sd.SecurityDescriptor.Dacl != null)
+                    {
+                        _logger.Info("");
+                        
+                        _logger.Error("Discretionary Access Control List");
+                        DumpAcl(sd.SecurityDescriptor.Dacl);
+                    }
+
+                    if (sd.SecurityDescriptor.Sacl != null)
+                    {
+                        _logger.Info("");
+                        
+                        _logger.Error("System Access Control List");
+                        DumpAcl(sd.SecurityDescriptor.Sacl);
+                    }
+                }
+
             }
             catch (Exception e)
             {
                 _logger.Error($"There was an error loading the file! Error: {e.Message}");
+            }
+        }
+
+        private static void DumpAcl(XAclRecord acl)
+        {
+            _logger.Info($"ACE record count: {acl.AceRecords.Count:N0}");
+            _logger.Info($"ACL type: {acl.AclType.ToString()}");
+            _logger.Info("");
+            var i = 0;
+            foreach (var aceRecord in acl.AceRecords)
+            {
+                _logger.Warn($"------------ Ace record #{i} ------------");
+                _logger.Info($"Type: {aceRecord.AceType}");
+                _logger.Info($"Flags: {aceRecord.AceFlags}");
+                            
+                if (aceRecord.SidType == Helpers.SidTypeEnum.UnknownOrUserSid)
+                {
+                    _logger.Info($"SID: {aceRecord.Sid}");
+                }
+                else
+                {
+                    _logger.Info($"SID: {Helpers.GetDescriptionFromEnumValue(aceRecord.SidType)}");
+                }
+                            
+                i += 1;
+                _logger.Info("");
             }
         }
 
@@ -1330,6 +1473,7 @@ namespace MFTECmd
 
         public string DumpDir { get; set; }
         public string DumpOffset { get; set; }
+        public string DumpSecurity { get; set; }
 
         public bool CsvSeparator { get; set; }
         public bool AllTimeStampsAllTime { get; set; }

@@ -13,5 +13,15 @@ namespace MFTECmd
         public long Offset { get; set; }
         public string OwnerSid { get; set; }
         public string GroupSid { get; set; }
+        public string Control { get; set; }
+
+        public int SaclAceCount { get; set; }
+        public string UniqueSaclAceTypes { get; set; }
+
+        public int DaclAceCount { get; set; }
+        public string UniqueDaclAceTypes { get; set; }
+
+        public long FileOffset { get;set; }
+
     }
 }
