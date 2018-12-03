@@ -614,11 +614,11 @@ namespace MFTECmd
 
                     if (sd.SecurityDescriptor.OwnerSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
                     {
-                        _logger.Info($"SID: {sd.SecurityDescriptor.OwnerSid}");
+                        _logger.Info($"Owner SID: {sd.SecurityDescriptor.OwnerSid}");
                     }
                     else
                     {
-                        _logger.Info($"SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.OwnerSidType)}");
+                        _logger.Info($"Owner SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.OwnerSidType)}");
                     }
 
                     if (sd.SecurityDescriptor.GroupSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
@@ -629,8 +629,6 @@ namespace MFTECmd
                     {
                         _logger.Info($"Group SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.GroupSidType)}");
                     }
-
-
 
                    
                     if (sd.SecurityDescriptor.Dacl != null)
@@ -660,14 +658,14 @@ namespace MFTECmd
         private static void DumpAcl(XAclRecord acl)
         {
             _logger.Info($"ACE record count: {acl.AceRecords.Count:N0}");
-            _logger.Info($"ACL type: {acl.AclType.ToString()}");
+            _logger.Info($"ACL type: {acl.AclType}");
             _logger.Info("");
             var i = 0;
             foreach (var aceRecord in acl.AceRecords)
             {
                 _logger.Warn($"------------ Ace record #{i} ------------");
                 _logger.Info($"Type: {aceRecord.AceType}");
-                _logger.Info($"Flags: {aceRecord.AceFlags}");
+                _logger.Info($"Flags: {aceRecord.AceFlags.ToString().Replace(", "," | ")}");
                             
                 if (aceRecord.SidType == Helpers.SidTypeEnum.UnknownOrUserSid)
                 {
