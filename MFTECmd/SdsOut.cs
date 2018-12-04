@@ -9,8 +9,8 @@ namespace MFTECmd
    public class SdsOut
     {
         public string Hash { get; set; }
-        public int Id { get; set; }
-        public long Offset { get; set; }
+        public uint Id { get; set; }
+        public ulong Offset { get; set; }
         public string OwnerSid { get; set; }
         public string GroupSid { get; set; }
         public string Control { get; set; }
@@ -21,7 +21,7 @@ namespace MFTECmd
         public int DaclAceCount { get; set; }
         public string UniqueDaclAceTypes { get; set; }
 
-        public long FileOffset { get;set; }
+        public ulong FileOffset { get;set; }
 
     }
 }

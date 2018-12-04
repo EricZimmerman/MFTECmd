@@ -1,8 +1,8 @@
 {
-	"profiles": {
-		"MFTECmd": {
-			"commandName": "Project",
-			"commandLineArgs": "-f D:\\Temp\\MFT --json C:\\Temp\\"
-		}
-	}
+  "profiles": {
+    "default": {
+      "commandName": "Project",
+      "commandLineArgs": "-f \":\\C\\$Extend\\$J\" --csv . --vl 2"
+    }
+  }
 }
