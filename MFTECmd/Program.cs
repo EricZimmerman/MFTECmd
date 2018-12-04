@@ -18,6 +18,7 @@ using NLog;
 using NLog.Config;
 using NLog.Targets;
 using SDS;
+using Secure;
 using ServiceStack;
 using ServiceStack.Text;
 using Usn;
@@ -388,9 +389,12 @@ namespace MFTECmd
         {
             var sw = new Stopwatch();
             sw.Start();
+            Usn.Usn j;
+            
             try
             {
-                var j = UsnFile.Load(_fluentCommandLineParser.Object.File);
+                _logger.Trace("Initializing $J");
+                 j = UsnFile.Load(_fluentCommandLineParser.Object.File);
 
                 _logger.Info($"Usn entries found: {j.UsnEntries.Count:N0}");
 
@@ -464,7 +468,7 @@ namespace MFTECmd
             }
             catch (Exception e)
             {
-                _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                _logger.Error($"There was an error loading the file! Last offset processed: 0x{Usn.Usn.LastOffset:X}. Error: {e.Message}");
             }
         }
 
@@ -474,6 +478,7 @@ namespace MFTECmd
             sw.Start();
             try
             {
+              
                 var sds = SdsFile.Load(_fluentCommandLineParser.Object.File);
 
                 _logger.Info($"SDS entries found: {sds.SdsEntries.Count:N0}");
@@ -651,7 +656,7 @@ namespace MFTECmd
             }
             catch (Exception e)
             {
-                _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                _logger.Error($"There was an error loading the file! Last offset processed: 0x{Sds.LastOffset:X}. Error: {e.Message}");
             }
         }
 
@@ -1031,7 +1036,7 @@ namespace MFTECmd
             const int bootSig = 0x5346544E;
 
           
-            _logger.Trace($"Opening '{file}' and checking header");
+            _logger.Debug($"Opening '{file}' and checking header");
             using (var br = new BinaryReader(new FileStream(file, FileMode.Open,FileAccess.Read)))
             {
                 var buff = br.ReadBytes(50);
@@ -1060,13 +1065,13 @@ namespace MFTECmd
                     case 0x0:
                         //00 for sparse file
 
-                        if (majorVer ==  0 && minorVer == 0)
+                        if (majorVer != 0 || minorVer != 0)
                         {
-                            _logger.Debug("Found $J sig (0 size) and major/minor == 0");
-                            return FileType.UsnJournal;
+                            return FileType.Unknown;
                         }
 
-                        return FileType.Unknown;
+                        _logger.Debug("Found $J sig (0 size) and major/minor == 0)");
+                        return FileType.UsnJournal;
 
                     default:
                         var isBootSig = BitConverter.ToInt32(buff, 3);
@@ -1080,6 +1085,14 @@ namespace MFTECmd
                         {
                             _logger.Debug("Found $J sig (Major == 2, Minor == 0");
                             return FileType.UsnJournal;
+                        }
+
+                        var zeroOffset = BitConverter.ToUInt64(buff, 8);
+
+                        if (zeroOffset == 0 && sig32 != 0)
+                        {
+                            _logger.Debug("Found $SDS sig (Offset 0x8 as Int64 == 0");
+                            return FileType.Sds;
                         }
 
                         break;
