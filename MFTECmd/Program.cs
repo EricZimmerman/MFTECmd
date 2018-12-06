@@ -80,7 +80,12 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.BodyDriveLetter)
                 .As("bdl")
                 .WithDescription(
-                    "Drive letter (C, D, etc.) to use with bodyfile. Only the drive letter itself should be provided\r\n");
+                    "Drive letter (C, D, etc.) to use with bodyfile. Only the drive letter itself should be provided");
+
+            _fluentCommandLineParser.Setup(arg => arg.UseCR)
+                .As("blf")
+                .WithDescription(
+                    "When true, use LF vs CRLF for newlines. Default is FALSE\r\n").SetDefault(false);
 
 
             _fluentCommandLineParser.Setup(arg => arg.DumpDir)
@@ -730,10 +735,13 @@ namespace MFTECmd
                 try
                 {
                     swBody = new StreamWriter(outFile, false, Encoding.GetEncoding(1252), 4096 * 4);
-
+                    if (_fluentCommandLineParser.Object.UseCR)
+                    {
+                        swBody.NewLine = "\n";
+                    }
                     _bodyWriter = new CsvWriter(swBody);
                     _bodyWriter.Configuration.Delimiter = "|";
-
+                    
                     var foo = _bodyWriter.Configuration.AutoMap<BodyFile>();
                     foo.Map(t => t.Md5).Index(0);
                     foo.Map(t => t.Name).Index(1);
@@ -1481,6 +1489,7 @@ namespace MFTECmd
 
         public string BodyDirectory { get; set; }
         public string BodyDriveLetter { get; set; }
+        public bool UseCR { get; set; }
 
         public string CsvName { get; set; }
 
