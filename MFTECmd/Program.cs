@@ -725,11 +725,11 @@ namespace MFTECmd
 
                 _logger.Warn($"\r\nBodyfile output will be saved to '{outFile}'");
 
-                Encoding utf8WithoutBom = new UTF8Encoding(true);
+              //  Encoding utf8WithoutBom = new UTF8Encoding(true);
 
                 try
                 {
-                    swBody = new StreamWriter(outFile, false, utf8WithoutBom, 4096 * 4);
+                    swBody = new StreamWriter(outFile, false, Encoding.GetEncoding(1252), 4096 * 4);
 
                     _bodyWriter = new CsvWriter(swBody);
                     _bodyWriter.Configuration.Delimiter = "|";
