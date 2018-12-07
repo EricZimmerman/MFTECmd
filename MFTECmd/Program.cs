@@ -607,7 +607,7 @@ namespace MFTECmd
                         return;
                     }
 
-                    var sd = sds.SdsEntries.FirstOrDefault((t => t.Id == secId));
+                    var sd = sds.SdsEntries.FirstOrDefault(t => t.Id == secId);
 
                     if (sd == null)
                     {
