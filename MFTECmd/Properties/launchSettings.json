@@ -2,7 +2,7 @@
   "profiles": {
     "default": {
       "commandName": "Project",
-      "commandLineArgs": "-f \":\\C\\$Extend\\$J\" --csv . --vl 2"
+      "commandLineArgs": "-f \"C:\\Temp\\Demo\\C\\$Secure_$SDS --ds 0x11FE""
     }
   }
 }

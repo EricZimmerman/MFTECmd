@@ -586,18 +586,15 @@ namespace MFTECmd
                     var valOk = false;
                     int secId;
 
-                    if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                    if (_fluentCommandLineParser.Object.DumpSecurity.ToUpperInvariant().StartsWith("0X"))
                     {
-                        var rawNum = _fluentCommandLineParser.Object.DumpSecurity.Replace("0x", "");
-                        
+                        var rawNum = _fluentCommandLineParser.Object.DumpSecurity.ToUpperInvariant().Replace("0X", "");
 
                         valOk = int.TryParse(rawNum, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out secId);
-                        
                     }
                     else
                     {
                         valOk = int.TryParse(_fluentCommandLineParser.Object.DumpSecurity, out secId);
-                        
                     }
 
                     if (valOk == false)
