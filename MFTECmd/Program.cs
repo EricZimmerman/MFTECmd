@@ -76,6 +76,10 @@ namespace MFTECmd
                 .As("body")
                 .WithDescription(
                     "Directory to save bodyfile formatted results to. --bdl is also required when using this option");
+            _fluentCommandLineParser.Setup(arg => arg.BodyName)
+                .As("bodyf")
+                .WithDescription(
+                    "File name to save body formatted results to. When present, overrides default name");
 
             _fluentCommandLineParser.Setup(arg => arg.BodyDriveLetter)
                 .As("bdl")
@@ -723,6 +727,12 @@ namespace MFTECmd
                 }
 
                 var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.body";
+
+                if (_fluentCommandLineParser.Object.BodyName.IsNullOrEmpty() == false)
+                {
+                    outName = Path.GetFileName(_fluentCommandLineParser.Object.BodyName);
+                }
+
                 var outFile = Path.Combine(_fluentCommandLineParser.Object.BodyDirectory, outName);
 
                 _logger.Warn($"\r\nBodyfile output will be saved to '{outFile}'");
@@ -1489,6 +1499,7 @@ namespace MFTECmd
         public bool UseCR { get; set; }
 
         public string CsvName { get; set; }
+        public string BodyName { get; set; }
 
         public string DumpDir { get; set; }
         public string DumpOffset { get; set; }
