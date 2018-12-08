@@ -1090,7 +1090,7 @@ namespace MFTECmd
                         
                         if (majorVer == 2 && minorVer == 0)
                         {
-                            _logger.Debug("Found $J sig (Major == 2, Minor == 0");
+                            _logger.Debug("Found $J sig (Major == 2, Minor == 0)");
                             return FileType.UsnJournal;
                         }
 
