@@ -1054,7 +1054,10 @@ namespace MFTECmd
 
           
             _logger.Debug($"Opening '{file}' and checking header");
-            using (var br = new BinaryReader(new FileStream(file, FileMode.Open,FileAccess.Read)))
+
+            try
+            {
+ using (var br = new BinaryReader(new FileStream(file, FileMode.Open,FileAccess.Read)))
             {
                 var buff = br.ReadBytes(50);
                 _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
@@ -1117,6 +1120,14 @@ namespace MFTECmd
             }
 
             _logger.Debug("Failed to find a signature! Returning unknown");
+            }
+            catch (UnauthorizedAccessException e)
+            {
+                _logger.Fatal($"\r\nCould not access '{_fluentCommandLineParser.Object.File}'. Are you trying to access a live $MFT file? Extract it first, then try again.\r\n");
+                Environment.Exit(-1);
+            }
+
+           
             return FileType.Unknown;
         }
 
