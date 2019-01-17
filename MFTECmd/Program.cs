@@ -38,6 +38,8 @@ namespace MFTECmd
         private static CsvWriter _csvWriter;
         private static List<MFTRecordOut> _mftOutRecords;
 
+        private static readonly string BaseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+
 
         private static void Main(string[] args)
         {
@@ -184,11 +186,26 @@ namespace MFTECmd
                 return;
             }
 
-            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty() == false &&
-                !File.Exists(_fluentCommandLineParser.Object.File))
+            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty() == false )
             {
-                _logger.Warn($"File '{_fluentCommandLineParser.Object.File}' not found. Exiting");
-                return;
+
+                if (Path.GetDirectoryName(_fluentCommandLineParser.Object.File)?.Length == 3  )
+                {
+                  //OK
+                }
+                else if (_fluentCommandLineParser.Object.File.ToUpperInvariant().Contains("$EXTEND\\$USNJRNL"))
+                {
+                    //OK
+                }
+                else if (!File.Exists(_fluentCommandLineParser.Object.File))
+                {
+                    //the path is off the root of the drive, so it works for things like $Boot, $MFT, etc
+                    _logger.Warn($"File '{_fluentCommandLineParser.Object.File}' not found. Exiting");
+                    return;   
+                }
+          
+
+
             }
 
 
@@ -259,7 +276,7 @@ namespace MFTECmd
                     break;
                 case FileType.UsnJournal:
                     if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty()
-                        )
+                    )
                     {
                         _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
@@ -273,8 +290,9 @@ namespace MFTECmd
                     ProcessBoot();
                     break;
                 case FileType.Sds:
-                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() && _fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty())
-                    
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
+                        _fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty())
+
                     {
                         _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
@@ -299,7 +317,35 @@ namespace MFTECmd
             sw.Start();
             try
             {
-                var b = BootFile.Load(_fluentCommandLineParser.Object.File);
+                Boot.Boot b = null;
+
+                try
+                {
+                    b = BootFile.Load(_fluentCommandLineParser.Object.File);
+                }
+                catch (Exception)
+                {
+                    try
+                    {
+                        _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+
+                        var ll = new List<string>();
+                        ll.Add(_fluentCommandLineParser.Object.File);
+
+                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
+
+                        b = new Boot.Boot(rawFiles.First().FileBytes);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                        return;
+                    }
+                    
+                }
+            
+
+
 
                 sw.Stop();
 
@@ -399,11 +445,40 @@ namespace MFTECmd
             var sw = new Stopwatch();
             sw.Start();
             Usn.Usn j;
-            
+
             try
             {
                 _logger.Trace("Initializing $J");
-                 j = UsnFile.Load(_fluentCommandLineParser.Object.File);
+
+              //  j = UsnFile.Load(_fluentCommandLineParser.Object.File);
+
+                try
+                {
+                    j = UsnFile.Load(_fluentCommandLineParser.Object.File);
+                }
+                catch (Exception)
+                {
+                    try
+                    {
+                        _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+
+                        var ll = new List<string>();
+                        ll.Add(_fluentCommandLineParser.Object.File);
+
+                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
+
+                         var start = UsnFile.FindStartingOffset(new MemoryStream(rawFiles.First().FileBytes));
+
+                        j = new Usn.Usn(rawFiles.First().FileBytes, start);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                        return;
+                    }
+                    
+                }
+                
 
                 _logger.Info($"Usn entries found: {j.UsnEntries.Count:N0}");
 
@@ -477,18 +552,45 @@ namespace MFTECmd
             }
             catch (Exception e)
             {
-                _logger.Error($"There was an error loading the file! Last offset processed: 0x{Usn.Usn.LastOffset:X}. Error: {e.Message}");
+                _logger.Error(
+                    $"There was an error loading the file! Last offset processed: 0x{Usn.Usn.LastOffset:X}. Error: {e.Message}");
             }
         }
 
-         private static void ProcessSds()
+        private static void ProcessSds()
         {
             var sw = new Stopwatch();
             sw.Start();
             try
             {
-              
-                var sds = SdsFile.Load(_fluentCommandLineParser.Object.File);
+                Sds sds = null;
+
+                try
+                {
+                    sds =SdsFile.Load(_fluentCommandLineParser.Object.File);
+                }
+                catch (Exception)
+                {
+                    try
+                    {
+                        _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+
+                        var ll = new List<string>();
+                        ll.Add(_fluentCommandLineParser.Object.File);
+
+                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
+
+                        sds = new Sds(rawFiles.First().FileBytes);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                        return;
+                    }
+                    
+                }
+                
+
 
                 _logger.Info($"SDS entries found: {sds.SdsEntries.Count:N0}");
 
@@ -499,90 +601,89 @@ namespace MFTECmd
 
                 if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
                 {
+                    StreamWriter swCsv = null;
 
-                StreamWriter swCsv = null;
+                    if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                    {
+                        _logger.Warn(
+                            $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                        Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                    }
 
-                if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
-                {
-                    _logger.Warn(
-                        $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
-                    Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
-                }
+                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
 
-                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
+                    if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                    {
+                        outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                    }
 
-                if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
-                {
-                    outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
-                }
+                    var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
 
-                var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                    _logger.Warn($"\r\nCSV output will be saved to '{outFile}'\r\n");
 
-                _logger.Warn($"\r\nCSV output will be saved to '{outFile}'\r\n");
+                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
-                swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+                    _csvWriter = new CsvWriter(swCsv);
+                    if (_fluentCommandLineParser.Object.CsvSeparator == false)
+                    {
+                        _csvWriter.Configuration.Delimiter = "\t";
+                    }
 
-                _csvWriter = new CsvWriter(swCsv);
-                if (_fluentCommandLineParser.Object.CsvSeparator == false)
-                {
-                    _csvWriter.Configuration.Delimiter = "\t";
-                }
-
-                var foo = _csvWriter.Configuration.AutoMap<SdsOut>();
+                    var foo = _csvWriter.Configuration.AutoMap<SdsOut>();
 
 //                foo.Map(t => t.UpdateTimestamp).ConvertUsing(t =>
 //                    $"{t.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
 
-                _csvWriter.Configuration.RegisterClassMap(foo);
+                    _csvWriter.Configuration.RegisterClassMap(foo);
 
-                _csvWriter.WriteHeader<SdsOut>();
-                _csvWriter.NextRecord();
-
-                foreach (var sdsEntry in sds.SdsEntries)
-                {
-                    var sdO = new SdsOut
-                    {
-                        Hash = sdsEntry.Hash,
-                        Id = sdsEntry.Id,
-                        Offset = sdsEntry.Offset,
-                        OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
-                        GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
-                        Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ","|"),
-                        FileOffset = sdsEntry.FileOffset
-                    };
-
-                    if (sdsEntry.SecurityDescriptor.Sacl != null)
-                    {
-                        sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
-                     var uniqueAce = new HashSet<string>();
-                        foreach (var saclAceRecord in sdsEntry.SecurityDescriptor.Sacl.AceRecords)
-                        {
-                            uniqueAce.Add(saclAceRecord.AceType.ToString());
-                        }
-
-                        sdO.UniqueSaclAceTypes = string.Join("|", uniqueAce);
-                    }
-
-                    if (sdsEntry.SecurityDescriptor.Dacl != null)
-                    {
-                        sdO.DaclAceCount = sdsEntry.SecurityDescriptor.Dacl.AceCount;
-                        var uniqueAce = new HashSet<string>();
-                        foreach (var daclAceRecord in sdsEntry.SecurityDescriptor.Dacl.AceRecords)
-                        {
-                            uniqueAce.Add(daclAceRecord.AceType.ToString());
-                        }
-
-                        sdO.UniqueDaclAceTypes = string.Join("|", uniqueAce);
-                    }
-
-                    _logger.Trace(sdsEntry.SecurityDescriptor);
-
-                    _csvWriter.WriteRecord(sdO);
+                    _csvWriter.WriteHeader<SdsOut>();
                     _csvWriter.NextRecord();
-                }
 
-                swCsv.Flush();
-                swCsv.Close();
+                    foreach (var sdsEntry in sds.SdsEntries)
+                    {
+                        var sdO = new SdsOut
+                        {
+                            Hash = sdsEntry.Hash,
+                            Id = sdsEntry.Id,
+                            Offset = sdsEntry.Offset,
+                            OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
+                            GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
+                            Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ", "|"),
+                            FileOffset = sdsEntry.FileOffset
+                        };
+
+                        if (sdsEntry.SecurityDescriptor.Sacl != null)
+                        {
+                            sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
+                            var uniqueAce = new HashSet<string>();
+                            foreach (var saclAceRecord in sdsEntry.SecurityDescriptor.Sacl.AceRecords)
+                            {
+                                uniqueAce.Add(saclAceRecord.AceType.ToString());
+                            }
+
+                            sdO.UniqueSaclAceTypes = string.Join("|", uniqueAce);
+                        }
+
+                        if (sdsEntry.SecurityDescriptor.Dacl != null)
+                        {
+                            sdO.DaclAceCount = sdsEntry.SecurityDescriptor.Dacl.AceCount;
+                            var uniqueAce = new HashSet<string>();
+                            foreach (var daclAceRecord in sdsEntry.SecurityDescriptor.Dacl.AceRecords)
+                            {
+                                uniqueAce.Add(daclAceRecord.AceType.ToString());
+                            }
+
+                            sdO.UniqueDaclAceTypes = string.Join("|", uniqueAce);
+                        }
+
+                        _logger.Trace(sdsEntry.SecurityDescriptor);
+
+                        _csvWriter.WriteRecord(sdO);
+                        _csvWriter.NextRecord();
+                    }
+
+                    swCsv.Flush();
+                    swCsv.Close();
                 }
 
                 if (_fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty() == false)
@@ -619,7 +720,7 @@ namespace MFTECmd
                     _logger.Info("");
                     _logger.Fatal($"Details for security record # {sd.Id} (0x{sd.Id:X})");
                     _logger.Info($"Hash value: {sd.Hash}, Offset: 0x{sd.Offset:X}");
-                    _logger.Info($"Control flags: {sd.SecurityDescriptor.Control.ToString().Replace(", "," | ")}");
+                    _logger.Info($"Control flags: {sd.SecurityDescriptor.Control.ToString().Replace(", ", " | ")}");
                     _logger.Info("");
 
 
@@ -629,7 +730,8 @@ namespace MFTECmd
                     }
                     else
                     {
-                        _logger.Info($"Owner SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.OwnerSidType)}");
+                        _logger.Info(
+                            $"Owner SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.OwnerSidType)}");
                     }
 
                     if (sd.SecurityDescriptor.GroupSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
@@ -638,14 +740,15 @@ namespace MFTECmd
                     }
                     else
                     {
-                        _logger.Info($"Group SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.GroupSidType)}");
+                        _logger.Info(
+                            $"Group SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.GroupSidType)}");
                     }
 
-                   
+
                     if (sd.SecurityDescriptor.Dacl != null)
                     {
                         _logger.Info("");
-                        
+
                         _logger.Error("Discretionary Access Control List");
                         DumpAcl(sd.SecurityDescriptor.Dacl);
                     }
@@ -653,16 +756,16 @@ namespace MFTECmd
                     if (sd.SecurityDescriptor.Sacl != null)
                     {
                         _logger.Info("");
-                        
+
                         _logger.Error("System Access Control List");
                         DumpAcl(sd.SecurityDescriptor.Sacl);
                     }
                 }
-
             }
             catch (Exception e)
             {
-                _logger.Error($"There was an error loading the file! Last offset processed: 0x{Sds.LastOffset:X}. Error: {e.Message}");
+                _logger.Error(
+                    $"There was an error loading the file! Last offset processed: 0x{Sds.LastOffset:X}. Error: {e.Message}");
             }
         }
 
@@ -676,8 +779,8 @@ namespace MFTECmd
             {
                 _logger.Warn($"------------ Ace record #{i} ------------");
                 _logger.Info($"Type: {aceRecord.AceType}");
-                _logger.Info($"Flags: {aceRecord.AceFlags.ToString().Replace(", "," | ")}");
-                            
+                _logger.Info($"Flags: {aceRecord.AceFlags.ToString().Replace(", ", " | ")}");
+
                 if (aceRecord.SidType == Helpers.SidTypeEnum.UnknownOrUserSid)
                 {
                     _logger.Info($"SID: {aceRecord.Sid}");
@@ -686,7 +789,7 @@ namespace MFTECmd
                 {
                     _logger.Info($"SID: {Helpers.GetDescriptionFromEnumValue(aceRecord.SidType)}");
                 }
-                            
+
                 i += 1;
                 _logger.Info("");
             }
@@ -699,6 +802,17 @@ namespace MFTECmd
             try
             {
                 _mft = MftFile.Load(_fluentCommandLineParser.Object.File);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+
+                var ll = new List<string>();
+                ll.Add(_fluentCommandLineParser.Object.File);
+
+                var  rawFiles = RawCopy.Helper.GetFiles(ll);
+
+                _mft = new Mft(rawFiles.First().FileBytes);
             }
             catch (Exception e)
             {
@@ -737,7 +851,7 @@ namespace MFTECmd
 
                 _logger.Warn($"\r\nBodyfile output will be saved to '{outFile}'");
 
-              //  Encoding utf8WithoutBom = new UTF8Encoding(true);
+                //  Encoding utf8WithoutBom = new UTF8Encoding(true);
 
                 try
                 {
@@ -746,9 +860,10 @@ namespace MFTECmd
                     {
                         swBody.NewLine = "\n";
                     }
+
                     _bodyWriter = new CsvWriter(swBody);
                     _bodyWriter.Configuration.Delimiter = "|";
-                    
+
                     var foo = _bodyWriter.Configuration.AutoMap<BodyFile>();
                     foo.Map(t => t.Md5).Index(0);
                     foo.Map(t => t.Name).Index(1);
@@ -1052,82 +1167,101 @@ namespace MFTECmd
             const int sdsSig = 0x32FEC6CB;
             const int bootSig = 0x5346544E;
 
-          
+
             _logger.Debug($"Opening '{file}' and checking header");
+
+
+            var buff = new byte[50];
 
             try
             {
- using (var br = new BinaryReader(new FileStream(file, FileMode.Open,FileAccess.Read)))
-            {
-                var buff = br.ReadBytes(50);
-                _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
-
-                var sig32 = BitConverter.ToInt32(buff, 0);
-
-                //some usn checks
-                var majorVer = BitConverter.ToInt16(buff, 4);
-                var minorVer = BitConverter.ToInt16(buff, 6);
-
-                _logger.Debug($"Sig32: 0x{sig32:X}");
-
-                switch (sig32)
+                try
                 {
-                    case logFileSig:
-                        _logger.Debug("Found $LogFile sig");
-                        return FileType.LogFile;
-
-                    case mftSig:
-                        _logger.Debug("Found $MFT sig");
-                        return FileType.Mft;
-                    case sdsSig:
-                        return FileType.Sds;
-
-                    case 0x0:
-                        //00 for sparse file
-
-                        if (majorVer != 0 || minorVer != 0)
-                        {
-                            return FileType.Unknown;
-                        }
-
-                        _logger.Debug("Found $J sig (0 size) and major/minor == 0)");
-                        return FileType.UsnJournal;
-
-                    default:
-                        var isBootSig = BitConverter.ToInt32(buff, 3);
-                        if (isBootSig == bootSig)
-                        {
-                            _logger.Debug("Found $Boot sig");
-                            return FileType.Boot;
-                        }
-                        
-                        if (majorVer == 2 && minorVer == 0)
-                        {
-                            _logger.Debug("Found $J sig (Major == 2, Minor == 0)");
-                            return FileType.UsnJournal;
-                        }
-
-                        var zeroOffset = BitConverter.ToUInt64(buff, 8);
-
-                        if (zeroOffset == 0 && sig32 != 0)
-                        {
-                            _logger.Debug("Found $SDS sig (Offset 0x8 as Int64 == 0");
-                            return FileType.Sds;
-                        }
-
-                        break;
+                    using (var br = new BinaryReader(new FileStream(file, FileMode.Open, FileAccess.Read)))
+                    {
+                        buff = br.ReadBytes(50);
+                        _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
+                    }
                 }
-            }
+                catch (Exception)
+                {
+                    var ll = new List<string>();
+                    ll.Add(file);
 
-            _logger.Debug("Failed to find a signature! Returning unknown");
+                  var  rawFiles = RawCopy.Helper.GetFiles(ll);
+
+                  Buffer.BlockCopy(rawFiles.First().FileBytes,0,buff,0,50);
+                }
+                
+
+
+                    var sig32 = BitConverter.ToInt32(buff, 0);
+
+                    //some usn checks
+                    var majorVer = BitConverter.ToInt16(buff, 4);
+                    var minorVer = BitConverter.ToInt16(buff, 6);
+
+                    _logger.Debug($"Sig32: 0x{sig32:X}");
+
+                    switch (sig32)
+                    {
+                        case logFileSig:
+                            _logger.Debug("Found $LogFile sig");
+                            return FileType.LogFile;
+
+                        case mftSig:
+                            _logger.Debug("Found $MFT sig");
+                            return FileType.Mft;
+                        case sdsSig:
+                            return FileType.Sds;
+
+                        case 0x0:
+                            //00 for sparse file
+
+                            if (majorVer != 0 || minorVer != 0)
+                            {
+                                return FileType.Unknown;
+                            }
+
+                            _logger.Debug("Found $J sig (0 size) and major/minor == 0)");
+                            return FileType.UsnJournal;
+
+                        default:
+                            var isBootSig = BitConverter.ToInt32(buff, 3);
+                            if (isBootSig == bootSig)
+                            {
+                                _logger.Debug("Found $Boot sig");
+                                return FileType.Boot;
+                            }
+
+                            if (majorVer == 2 && minorVer == 0)
+                            {
+                                _logger.Debug("Found $J sig (Major == 2, Minor == 0)");
+                                return FileType.UsnJournal;
+                            }
+
+                            var zeroOffset = BitConverter.ToUInt64(buff, 8);
+
+                            if (zeroOffset == 0 && sig32 != 0)
+                            {
+                                _logger.Debug("Found $SDS sig (Offset 0x8 as Int64 == 0");
+                                return FileType.Sds;
+                            }
+
+                            break;
+                    }
+                
+
+                _logger.Debug("Failed to find a signature! Returning unknown");
             }
             catch (UnauthorizedAccessException e)
             {
-                _logger.Fatal($"\r\nCould not access '{_fluentCommandLineParser.Object.File}'. Are you trying to access a live $MFT file? Extract it first, then try again.\r\n");
+                _logger.Fatal(
+                    $"\r\nCould not access '{_fluentCommandLineParser.Object.File}'. Rerun the program as an administrator.\r\n");
                 Environment.Exit(-1);
             }
 
-           
+
             return FileType.Unknown;
         }
 
@@ -1465,14 +1599,13 @@ namespace MFTECmd
             return principal.IsInRole(WindowsBuiltInRole.Administrator);
         }
 
-        private static readonly string BaseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-
         private static void SetupNLog()
         {
-            if (File.Exists( Path.Combine(BaseDirectory,"Nlog.config")))
+            if (File.Exists(Path.Combine(BaseDirectory, "Nlog.config")))
             {
                 return;
             }
+
             var config = new LoggingConfiguration();
             var loglevel = LogLevel.Info;
 

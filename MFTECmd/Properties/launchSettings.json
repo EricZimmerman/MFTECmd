@@ -1,8 +1,9 @@
 {
   "profiles": {
-    "default": {
+    "Start": {
       "commandName": "Project",
-      "commandLineArgs": "-f \"C:\\Temp\\Demo\\C\\$Secure_$SDS --ds 0x11FE""
+      "commandLineArgs": "-f c:\\$Boot --csv c:\\temp",
+      "ErrorString": "After parsing a value an unexpected character was encountered: \". Path 'profiles.default.commandLineArgs', line 5, position 75."
     }
   }
 }

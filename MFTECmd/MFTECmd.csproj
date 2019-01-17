@@ -5,10 +5,10 @@
       <TargetFrameworks>net461</TargetFrameworks>
       <Authors>Eric R. Zimmerman</Authors>
       <Description>MFTECmd</Description>
-      <AssemblyVersion>0.3.6.2</AssemblyVersion>
-      <FileVersion>0.3.6.2</FileVersion>
+      <AssemblyVersion>0.4.0.0</AssemblyVersion>
+      <FileVersion>0.4.0.0</FileVersion>
       <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-      <Version>0.3.6.2</Version>
+      <Version>0.4.0.0</Version>
       <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
       <Copyright>Eric R. Zimmerman</Copyright>
    </PropertyGroup>
@@ -37,6 +37,9 @@
       </Reference>
       <Reference Include="MFT">
          <HintPath>..\Dependencies\MFT.dll</HintPath>
+      </Reference>
+      <Reference Include="RawCopy">
+        <HintPath>..\Dependencies\RawCopy.dll</HintPath>
       </Reference>
       <Reference Include="Secure">
         <HintPath>..\Dependencies\Secure.dll</HintPath>
