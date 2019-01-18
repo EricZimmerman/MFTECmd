@@ -1192,8 +1192,15 @@ namespace MFTECmd
 
                   Buffer.BlockCopy(rawFiles.First().FileBytes,0,buff,0,50);
                 }
-                
 
+                if (buff.Length < 20)
+                {
+                    _logger.Fatal(
+                        $"\r\nNot enough data found in '{_fluentCommandLineParser.Object.File}'. Is the file empty? Exiting\r\n");
+                    Environment.Exit(-1);
+
+                }
+                    
 
                     var sig32 = BitConverter.ToInt32(buff, 0);
 
