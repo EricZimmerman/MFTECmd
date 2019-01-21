@@ -110,6 +110,12 @@ namespace MFTECmd
                     "Dump full details for entry/sequence #. Format is 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5")
                 .SetDefault(string.Empty);
 
+            _fluentCommandLineParser.Setup(arg => arg.Fls)
+                .As("fls")
+                .WithDescription(
+                    "When true, displays contents of directory specified by --de. Ignored when --de points to a file.")
+                .SetDefault(false);
+
             _fluentCommandLineParser.Setup(arg => arg.DumpSecurity)
                 .As("ds")
                 .WithDescription(
@@ -132,10 +138,6 @@ namespace MFTECmd
                 .WithDescription(
                     "Verbose log messages. 1 == Debug, 2 == Trace").SetDefault(0);
 
-            _fluentCommandLineParser.Setup(arg => arg.CsvSeparator)
-                .As("cs")
-                .WithDescription(
-                    "When true, use comma instead of tab for field separator. Default is TRUE").SetDefault(true);
 
             _fluentCommandLineParser.Setup(arg => arg.AllTimeStampsAllTime)
                 .As("at")
@@ -396,10 +398,6 @@ namespace MFTECmd
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
                     _csvWriter = new CsvWriter(swCsv);
-                    if (_fluentCommandLineParser.Object.CsvSeparator == false)
-                    {
-                        _csvWriter.Configuration.Delimiter = "\t";
-                    }
 
                     var foo = _csvWriter.Configuration.AutoMap<BootOut>();
 
@@ -510,10 +508,6 @@ namespace MFTECmd
                 swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
                 _csvWriter = new CsvWriter(swCsv);
-                if (_fluentCommandLineParser.Object.CsvSeparator == false)
-                {
-                    _csvWriter.Configuration.Delimiter = "\t";
-                }
 
                 var foo = _csvWriter.Configuration.AutoMap<JEntryOut>();
 
@@ -624,10 +618,6 @@ namespace MFTECmd
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
                     _csvWriter = new CsvWriter(swCsv);
-                    if (_fluentCommandLineParser.Object.CsvSeparator == false)
-                    {
-                        _csvWriter.Configuration.Delimiter = "\t";
-                    }
 
                     var foo = _csvWriter.Configuration.AutoMap<SdsOut>();
 
@@ -919,10 +909,6 @@ namespace MFTECmd
                         swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
 
                         _csvWriter = new CsvWriter(swCsv);
-                        if (_fluentCommandLineParser.Object.CsvSeparator == false)
-                        {
-                            _csvWriter.Configuration.Delimiter = "\t";
-                        }
 
                         var foo = _csvWriter.Configuration.AutoMap<MFTRecordOut>();
 
@@ -1152,9 +1138,41 @@ namespace MFTECmd
                     return;
                 }
 
-                _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
+                if (fr.IsDirectory() && _fluentCommandLineParser.Object.Fls)
+                {
+                    var dlist = _mft.GetDirectoryContents(key);
+                    var fn = fr.Attributes.FirstOrDefault(t => t.AttributeType == AttributeType.FileName) as FileName;
+                    var name = key;
+                    if (fn != null)
+                    {
+                        var pp =  _mft.GetFullParentPath(key);
+                        name = $"{pp}";
+                    }
 
-                _logger.Info(fr);
+                    _logger.Warn($"Contents for '{name}':\r\n");
+                    _logger.Info($"Key\t\t\tName");
+                    foreach (var parentMapEntry in dlist)
+                    {
+                        if (parentMapEntry.IsDirectory)
+                        {
+                            _logger.Error($"{parentMapEntry.Key.PadRight(16)}\t{parentMapEntry.FileName} ");
+                        }
+                        else
+                        {
+                            _logger.Info($"{parentMapEntry.Key.PadRight(16)}\t{parentMapEntry.FileName} ");
+                        }
+                    }
+
+                    _logger.Info("");
+                }
+                else
+                {
+                    _logger.Warn($"Dumping details for file record with key '{key}'\r\n");
+
+                    _logger.Info(fr);
+                }
+
+               
             }
 
             #endregion
@@ -1649,6 +1667,7 @@ namespace MFTECmd
         public string DateTimeFormat { get; set; }
         public bool IncludeShortNames { get; set; }
         public string DumpEntry { get; set; }
+        public bool Fls { get; set; }
         public int Verbose { get; set; }
 
         public string BodyDirectory { get; set; }
@@ -1662,7 +1681,6 @@ namespace MFTECmd
         public string DumpOffset { get; set; }
         public string DumpSecurity { get; set; }
 
-        public bool CsvSeparator { get; set; }
         public bool AllTimeStampsAllTime { get; set; }
     }
 }
