@@ -1279,13 +1279,12 @@ namespace MFTECmd
 
                 _logger.Debug("Failed to find a signature! Returning unknown");
             }
-            catch (UnauthorizedAccessException e)
+            catch (UnauthorizedAccessException)
             {
                 _logger.Fatal(
                     $"\r\nCould not access '{_fluentCommandLineParser.Object.File}'. Rerun the program as an administrator.\r\n");
                 Environment.Exit(-1);
             }
-
 
             return FileType.Unknown;
         }
