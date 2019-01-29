@@ -62,6 +62,10 @@ namespace MFTECmd
                 .As("json")
                 .WithDescription(
                     "Directory to save JSON formatted results to. This or --csv required unless --de or --body is specified");
+            _fluentCommandLineParser.Setup(arg => arg.JsonName)
+                .As("jsonf")
+                .WithDescription(
+                    "File name to save JSON formatted results to. When present, overrides default name");
 
             _fluentCommandLineParser.Setup(arg => arg.CsvDirectory)
                 .As("csv")
@@ -1009,6 +1013,11 @@ namespace MFTECmd
 
                 var outBase = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.json";
 
+                if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
+                {
+                    outBase = Path.GetFileName(_fluentCommandLineParser.Object.JsonName);
+                }
+
                 if (Directory.Exists(_fluentCommandLineParser.Object.JsonDirectory) == false)
                 {
                     _logger.Warn(
@@ -1674,6 +1683,7 @@ namespace MFTECmd
         public bool UseCR { get; set; }
 
         public string CsvName { get; set; }
+        public string JsonName { get; set; }
         public string BodyName { get; set; }
 
         public string DumpDir { get; set; }
