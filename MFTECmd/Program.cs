@@ -1198,6 +1198,7 @@ namespace MFTECmd
             _logger.Debug($"Opening '{file}' and checking header");
 
 
+
             var buff = new byte[50];
 
             try
@@ -1215,9 +1216,18 @@ namespace MFTECmd
                     var ll = new List<string>();
                     ll.Add(file);
 
-                  var  rawFiles = RawCopy.Helper.GetFiles(ll);
+                    try
+                    {
+                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
 
-                  Buffer.BlockCopy(rawFiles.First().FileBytes,0,buff,0,50);
+                        Buffer.BlockCopy(rawFiles.First().FileBytes,0,buff,0,50);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Fatal(
+                            $"\r\nError opening file '{_fluentCommandLineParser.Object.File}'. Does it exist? Error: {e.Message} Exiting\r\n");
+                        Environment.Exit(-1);
+                    }
                 }
 
                 if (buff.Length < 20)
@@ -1284,7 +1294,6 @@ namespace MFTECmd
 
                             break;
                     }
-                
 
                 _logger.Debug("Failed to find a signature! Returning unknown");
             }
