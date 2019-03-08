@@ -340,7 +340,7 @@ namespace MFTECmd
 
                         var  rawFiles = RawCopy.Helper.GetFiles(ll);
 
-                        b = new Boot.Boot(rawFiles.First().FileBytes);
+                        b = new Boot.Boot(rawFiles.First().FileStream);
                     }
                     catch (Exception e)
                     {
@@ -469,9 +469,9 @@ namespace MFTECmd
 
                         var  rawFiles = RawCopy.Helper.GetFiles(ll);
 
-                         var start = UsnFile.FindStartingOffset(new MemoryStream(rawFiles.First().FileBytes));
+                         var start = UsnFile.FindStartingOffset(rawFiles.First().FileStream);
 
-                        j = new Usn.Usn(rawFiles.First().FileBytes, start);
+                        j = new Usn.Usn(rawFiles.First().FileStream, start);
                     }
                     catch (Exception e)
                     {
@@ -578,7 +578,7 @@ namespace MFTECmd
 
                         var  rawFiles = RawCopy.Helper.GetFiles(ll);
 
-                        sds = new Sds(rawFiles.First().FileBytes);
+                        sds = new Sds(rawFiles.First().FileStream);
                     }
                     catch (Exception e)
                     {
@@ -806,7 +806,7 @@ namespace MFTECmd
 
                 var  rawFiles = RawCopy.Helper.GetFiles(ll);
 
-                _mft = new Mft(rawFiles.First().FileBytes);
+                _mft = new Mft(rawFiles.First().FileStream);
             }
             catch (Exception e)
             {
@@ -1220,7 +1220,9 @@ namespace MFTECmd
                     {
                         var  rawFiles = RawCopy.Helper.GetFiles(ll);
 
-                        Buffer.BlockCopy(rawFiles.First().FileBytes,0,buff,0,50);
+                        rawFiles.First().FileStream.Read(buff, 0, 50);
+
+                        //Buffer.BlockCopy(rawFiles.First().FileStream,0,buff,0,50);
                     }
                     catch (Exception e)
                     {
