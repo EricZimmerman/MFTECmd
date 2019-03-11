@@ -23,6 +23,9 @@ using ServiceStack;
 using ServiceStack.Text;
 using Usn;
 using CsvWriter = CsvHelper.CsvWriter;
+using Directory = Alphaleonis.Win32.Filesystem.Directory;
+using File = Alphaleonis.Win32.Filesystem.File;
+using Path = Alphaleonis.Win32.Filesystem.Path;
 
 
 namespace MFTECmd
@@ -209,9 +212,6 @@ namespace MFTECmd
                     _logger.Warn($"File '{_fluentCommandLineParser.Object.File}' not found. Exiting");
                     return;   
                 }
-          
-
-
             }
 
 
@@ -240,6 +240,42 @@ namespace MFTECmd
             //determine file type
             var ft = GetFileType(_fluentCommandLineParser.Object.File);
             _logger.Warn($"File type: {ft}\r\n");
+
+            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+            {
+                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                {
+                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    return;
+                }
+            }
+
+            if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+            {
+                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.JsonDirectory) == false)
+                {
+                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    return;
+                }
+            }
+
+            if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false)
+            {
+                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.BodyDirectory) == false)
+                {
+                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    return;
+                }
+            }
+
+            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() == false)
+            {
+                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.DumpEntry) == false)
+                {
+                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    return;
+                }
+            }
 
             switch (ft)
             {
@@ -349,9 +385,6 @@ namespace MFTECmd
                     }
                     
                 }
-            
-
-
 
                 sw.Stop();
 
@@ -789,6 +822,20 @@ namespace MFTECmd
             }
         }
 
+        private static string BytesToString(long byteCount)
+        {
+            string[] suf = { "B", "KB", "MB", "GB", "TB", "PB", "EB" }; //Longs run out around EB
+            if (byteCount == 0)
+            {
+                return "0" + suf[0];
+            }
+
+            var bytes = Math.Abs(byteCount);
+            var place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024)));
+            var num = Math.Round(bytes / Math.Pow(1024, place), 1);
+            return $"{Math.Sign(byteCount) * num}{suf[place]}";
+        }
+
         private static void ProcessMft()
         {
             var sw = new Stopwatch();
@@ -813,6 +860,8 @@ namespace MFTECmd
                 _logger.Error($"There was an error loading the file! Error: {e.Message}");
                 return;
             }
+            
+            _logger.Info($"FILE records found: {_mft.FileRecords.Count:N0} (Free records: {_mft.FreeFileRecords.Count:N0}) File size: {BytesToString(_mft.FileSize)}\r\n");
 
             sw.Stop();
 

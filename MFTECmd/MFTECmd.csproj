@@ -23,6 +23,7 @@
      <DebugSymbols>true</DebugSymbols>
    </PropertyGroup>
    <ItemGroup>
+      <PackageReference Include="AlphaFS" Version="2.2.6" />
       <PackageReference Include="Costura.Fody" Version="3.3.2" />
       <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
       <PackageReference Include="NLog" Version="4.6.0-rc1" />
