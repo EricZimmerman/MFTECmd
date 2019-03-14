@@ -315,7 +315,6 @@ namespace MFTECmd
                 case FileType.LogFile:
                     _logger.Warn("$LogFile not supported yet. Exiting");
                     return;
-                    break;
                 case FileType.UsnJournal:
                     if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty()
                     )
@@ -418,7 +417,19 @@ namespace MFTECmd
                     {
                         _logger.Warn(
                             $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
-                        Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+
+                        try
+                        {
+                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                        }
+                        catch (Exception )
+                        {
+                            _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                            return;
+                        }
+
+
+                      
                     }
 
                     var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
@@ -528,7 +539,19 @@ namespace MFTECmd
                 {
                     _logger.Warn(
                         $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
-                    Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+
+                    try
+                    {
+                        Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                    }
+                    catch (Exception )
+                    {
+                        _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                        return;
+                    }
+
+
+
                 }
 
                 var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
@@ -638,7 +661,17 @@ namespace MFTECmd
                     {
                         _logger.Warn(
                             $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
-                        Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+
+                        try
+                        {
+                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                        }
+                        catch (Exception )
+                        {
+                            _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                            return;
+                        }
+
                     }
 
                     var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
@@ -880,7 +913,16 @@ namespace MFTECmd
                 {
                     _logger.Warn(
                         $"Path to '{_fluentCommandLineParser.Object.BodyDirectory}' doesn't exist. Creating...");
-                    Directory.CreateDirectory(_fluentCommandLineParser.Object.BodyDirectory);
+                    try
+                    {
+                        Directory.CreateDirectory(_fluentCommandLineParser.Object.BodyDirectory);
+                    }
+                    catch (Exception )
+                    {
+                        _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.BodyDirectory}'. Does a file with the same name exist? Exiting");
+                        return;
+                    }
+           
                 }
 
                 var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.body";
@@ -944,7 +986,16 @@ namespace MFTECmd
                     {
                         _logger.Warn(
                             $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
-                        Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                        try
+                        {
+                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                        }
+                        catch (Exception )
+                        {
+                            _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                          return;
+                        }
+                      
                     }
 
                     var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.csv";
@@ -1071,7 +1122,18 @@ namespace MFTECmd
                 {
                     _logger.Warn(
                         $"Path to '{_fluentCommandLineParser.Object.JsonDirectory}' doesn't exist. Creating...");
-                    Directory.CreateDirectory(_fluentCommandLineParser.Object.JsonDirectory);
+
+                    try
+                    {
+                        Directory.CreateDirectory(_fluentCommandLineParser.Object.JsonDirectory);
+                    }
+                    catch (Exception )
+                    {
+                        _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.JsonDirectory}'. Does a file with the same name exist? Exiting");
+                        return;
+                    }
+
+                 
                 }
 
                 var outFile = Path.Combine(_fluentCommandLineParser.Object.JsonDirectory, outBase);
