@@ -515,6 +515,8 @@ namespace MFTECmd
 
                          var start = UsnFile.FindStartingOffset(rawFiles.First().FileStream);
 
+                           rawFiles = RawCopy.Helper.GetFiles(ll);
+
                         j = new Usn.Usn(rawFiles.First().FileStream, start);
                     }
                     catch (Exception e)
