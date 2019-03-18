@@ -268,7 +268,7 @@ namespace MFTECmd
                 }
             }
 
-            if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() == false)
+            if (_fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty() == false)
             {
                 if (Directory.ExistsDrive(_fluentCommandLineParser.Object.DumpEntry) == false)
                 {

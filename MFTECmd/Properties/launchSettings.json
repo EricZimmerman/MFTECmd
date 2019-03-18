@@ -2,8 +2,8 @@
   "profiles": {
     "Start": {
       "commandName": "Project",
-      "commandLineArgs": "-f \"C:\\$Extend\\$UsnJrnl:$J\" --csv C:\\temp",
+      "commandLineArgs": "-f D:\\Egnyte\\Private\\ezimmerman\\MFTs\\$MFT_FROM_CAPUANO --de 5-5",
       "ErrorString": "After parsing a value an unexpected character was encountered: \". Path 'profiles.default.commandLineArgs', line 5, position 75."
     }
-  }
+  } 
 }
