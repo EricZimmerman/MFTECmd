@@ -1,9 +1,8 @@
 {
   "profiles": {
-    "Start": {
+    "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": "-f D:\\Egnyte\\Private\\ezimmerman\\MFTs\\$MFT_FROM_CAPUANO --de 5-5",
-      "ErrorString": "After parsing a value an unexpected character was encountered: \". Path 'profiles.default.commandLineArgs', line 5, position 75."
+      "commandLineArgs": "-f D:\\Egnyte\\Private\\ezimmerman\\MFTs\\$MFT_FROM_CAPUANO --de 245"
     }
-  } 
+  }
 }

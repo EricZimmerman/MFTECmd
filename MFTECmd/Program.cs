@@ -114,7 +114,7 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
                 .WithDescription(
-                    "Dump full details for entry/sequence #. Format is 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5")
+                    "Dump full details for entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5.")
                 .SetDefault(string.Empty);
 
             _fluentCommandLineParser.Setup(arg => arg.Fls)
@@ -1209,17 +1209,71 @@ namespace MFTECmd
 
                 var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
 
-                if (segs.Length != 2)
+                bool entryOk;
+                bool seqOk;
+                int entry;
+                int seq;
+
+                var key = String.Empty;;
+
+                if (segs.Length == 2)
                 {
                     _logger.Warn(
                         $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
                     return;
                 }
+                else if (segs.Length == 1)
+                {
+                    if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                    {
+                        var seg0 = segs[0].Replace("0x", "");
 
-                bool entryOk;
-                bool seqOk;
-                int entry;
-                int seq;
+                        entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
+                    }
+                    else
+                    {
+                        entryOk = int.TryParse(segs[0], out entry);
+                    }
+                    //try to find correct one
+
+                    var ff = _mft.FileRecords.Keys.Where(t => t.StartsWith($"{entry:X8}-")).ToList();
+
+                    if (ff.Count == 0)
+                    {
+                        ff = _mft.FreeFileRecords.Keys.Where(t => t.StartsWith($"{entry:X8}-")).ToList();
+                    }
+
+                    if (ff.Count == 1)
+                    {
+                        key = ff.First();
+                    }
+                    else if (ff.Count>1)
+                    {
+                        //more than one, dump and return
+                        Console.WriteLine();
+                        _logger.Warn("More than one FILE record found. Please specify one of the values below and try again!");
+                        Console.WriteLine();
+
+                        foreach (var f in ff)
+                        {
+                            _logger.Info(f);
+                        }
+
+                        Environment.Exit(-1);
+                    }
+                    else
+                    {
+                        Console.WriteLine();
+                        _logger.Warn("Could not find FILE record with specified Entry #. Use the --csv option and verify");
+                        Console.WriteLine();
+
+                        Environment.Exit(-1);
+                    }
+                }
+
+
+                if (key.Length == 0)
+                {
 
                 if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
                 {
@@ -1235,14 +1289,18 @@ namespace MFTECmd
                     seqOk = int.TryParse(segs[1], out seq);
                 }
 
-                if (entryOk == false || seqOk == false)
+                if ( entryOk == false || seqOk == false)
                 {
                     _logger.Warn(
                         $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
                     return;
                 }
 
-                var key = $"{entry:X8}-{seq:X8}";
+                key = $"{entry:X8}-{seq:X8}";
+                }
+
+
+                
 
                 if (_mft.FileRecords.ContainsKey(key))
                 {
