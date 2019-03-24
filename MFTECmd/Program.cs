@@ -114,7 +114,7 @@ namespace MFTECmd
             _fluentCommandLineParser.Setup(arg => arg.DumpEntry)
                 .As("de")
                 .WithDescription(
-                    "Dump full details for entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 624-5 or 0x270-0x5.")
+                    "Dump full details for entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 5, 624-5 or 0x270-0x5.")
                 .SetDefault(string.Empty);
 
             _fluentCommandLineParser.Setup(arg => arg.Fls)
@@ -140,17 +140,22 @@ namespace MFTECmd
                 .WithDescription(
                     "Include DOS file name types. Default is FALSE").SetDefault(false);
 
-            _fluentCommandLineParser.Setup(arg => arg.Verbose)
-                .As("vl")
-                .WithDescription(
-                    "Verbose log messages. 1 == Debug, 2 == Trace").SetDefault(0);
 
 
             _fluentCommandLineParser.Setup(arg => arg.AllTimeStampsAllTime)
                 .As("at")
                 .WithDescription(
-                    "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10. Default is FALSE")
+                    "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10. Default is FALSE\r\n")
                 .SetDefault(false);
+
+
+            _fluentCommandLineParser.Setup(arg => arg.Debug)
+                .As("debug")
+                .WithDescription("Show debug information during processing").SetDefault(false);
+
+            _fluentCommandLineParser.Setup(arg => arg.Trace)
+                .As("trace")
+                .WithDescription("Show trace information during processing\r\n").SetDefault(false);
 
             var header =
                 $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
@@ -224,12 +229,12 @@ namespace MFTECmd
                 _logger.Fatal("Warning: Administrator privileges not found!\r\n");
             }
 
-            if (_fluentCommandLineParser.Object.Verbose >= 1)
+            if (_fluentCommandLineParser.Object.Debug)
             {
                 LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Debug);
             }
 
-            if (_fluentCommandLineParser.Object.Verbose >= 2)
+            if (_fluentCommandLineParser.Object.Trace)
             {
                 LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Trace);
             }
@@ -1382,7 +1387,7 @@ namespace MFTECmd
                         _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
                     }
                 }
-                catch (Exception)
+                catch (Exception ee)
                 {
                     var ll = new List<string>();
                     ll.Add(file);
@@ -1858,7 +1863,8 @@ namespace MFTECmd
         public bool IncludeShortNames { get; set; }
         public string DumpEntry { get; set; }
         public bool Fls { get; set; }
-        public int Verbose { get; set; }
+        public bool Debug { get; set; }
+        public bool Trace { get; set; }
 
         public string BodyDirectory { get; set; }
         public string BodyDriveLetter { get; set; }
