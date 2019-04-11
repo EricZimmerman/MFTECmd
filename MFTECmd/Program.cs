@@ -248,7 +248,7 @@ namespace MFTECmd
 
             if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
             {
-                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.CsvDirectory)) == false)
                 {
                     _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;
@@ -257,7 +257,7 @@ namespace MFTECmd
 
             if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
             {
-                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.JsonDirectory) == false)
+                if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.JsonDirectory)) == false)
                 {
                     _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;
@@ -266,7 +266,7 @@ namespace MFTECmd
 
             if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false)
             {
-                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.BodyDirectory) == false)
+                if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.BodyDirectory)) == false)
                 {
                     _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;
@@ -275,7 +275,7 @@ namespace MFTECmd
 
             if (_fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty() == false)
             {
-                if (Directory.ExistsDrive(_fluentCommandLineParser.Object.DumpEntry) == false)
+                if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.DumpEntry)) == false)
                 {
                     _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;

@@ -26,10 +26,10 @@
       <PackageReference Include="AlphaFS" Version="2.2.6" />
       <PackageReference Include="Costura.Fody" Version="3.3.3" />
       <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
-      <PackageReference Include="NLog" Version="4.6.0" />
+      <PackageReference Include="NLog" Version="4.6.2" />
       <PackageReference Include="CsvHelper" Version="12.1.2" />
-      <PackageReference Include="Exceptionless" Version="4.3.2022" />
-      <PackageReference Include="ServiceStack.Text" Version="5.4.0" />
+      <PackageReference Include="Exceptionless" Version="4.3.2027" />
+      <PackageReference Include="ServiceStack.Text" Version="5.5.0" />
       <PackageReference Include="System.Security.Principal.Windows" Version="4.6.0-preview3.19128.7" />
    </ItemGroup>
    <ItemGroup>
