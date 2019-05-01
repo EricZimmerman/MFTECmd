@@ -1153,18 +1153,18 @@ namespace MFTECmd
 
                     using (var sWrite = new StreamWriter(new FileStream(outFile,FileMode.OpenOrCreate,FileAccess.Write)))
                     {
-                        foreach (var mftOutRecord in _mftOutRecords)
+                        if (_mftOutRecords != null)
                         {
-                            sWrite.WriteLine(mftOutRecord.ToJson());             
+                            foreach (var mftOutRecord in _mftOutRecords)
+                            {
+                                sWrite.WriteLine(mftOutRecord.ToJson());             
+                            }
                         }
                         
                         sWrite.Flush();
                         sWrite.Close();
                     }
 
-
-
-//                    File.WriteAllText(outFile, _mftOutRecords.ToJson());
                 }
                 catch (Exception e)
                 {
