@@ -1149,7 +1149,22 @@ namespace MFTECmd
 
                 try
                 {
-                    File.WriteAllText(outFile, _mftOutRecords.ToJson());
+                    JsConfig.DateHandler = DateHandler.ISO8601;
+
+                    using (var sWrite = new StreamWriter(new FileStream(outFile,FileMode.OpenOrCreate,FileAccess.Write)))
+                    {
+                        foreach (var mftOutRecord in _mftOutRecords)
+                        {
+                            sWrite.WriteLine(mftOutRecord.ToJson());             
+                        }
+                        
+                        sWrite.Flush();
+                        sWrite.Close();
+                    }
+
+
+
+//                    File.WriteAllText(outFile, _mftOutRecords.ToJson());
                 }
                 catch (Exception e)
                 {
@@ -1370,10 +1385,7 @@ namespace MFTECmd
             const int sdsSig = 0x32FEC6CB;
             const int bootSig = 0x5346544E;
 
-
             _logger.Debug($"Opening '{file}' and checking header");
-
-
 
             var buff = new byte[50];
 
@@ -1387,7 +1399,7 @@ namespace MFTECmd
                         _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
                     }
                 }
-                catch (Exception ee)
+                catch (Exception)
                 {
                     var ll = new List<string>();
                     ll.Add(file);
@@ -1397,8 +1409,6 @@ namespace MFTECmd
                         var  rawFiles = RawCopy.Helper.GetFiles(ll);
 
                         rawFiles.First().FileStream.Read(buff, 0, 50);
-
-                        //Buffer.BlockCopy(rawFiles.First().FileStream,0,buff,0,50);
                     }
                     catch (Exception e)
                     {
@@ -1415,63 +1425,62 @@ namespace MFTECmd
                     Environment.Exit(-1);
 
                 }
-                    
 
-                    var sig32 = BitConverter.ToInt32(buff, 0);
+                var sig32 = BitConverter.ToInt32(buff, 0);
 
-                    //some usn checks
-                    var majorVer = BitConverter.ToInt16(buff, 4);
-                    var minorVer = BitConverter.ToInt16(buff, 6);
+                //some usn checks
+                var majorVer = BitConverter.ToInt16(buff, 4);
+                var minorVer = BitConverter.ToInt16(buff, 6);
 
-                    _logger.Debug($"Sig32: 0x{sig32:X}");
+                _logger.Debug($"Sig32: 0x{sig32:X}");
 
-                    switch (sig32)
-                    {
-                        case logFileSig:
-                            _logger.Debug("Found $LogFile sig");
-                            return FileType.LogFile;
+                switch (sig32)
+                {
+                    case logFileSig:
+                        _logger.Debug("Found $LogFile sig");
+                        return FileType.LogFile;
 
-                        case mftSig:
-                            _logger.Debug("Found $MFT sig");
-                            return FileType.Mft;
-                        case sdsSig:
-                            return FileType.Sds;
+                    case mftSig:
+                        _logger.Debug("Found $MFT sig");
+                        return FileType.Mft;
+                    case sdsSig:
+                        return FileType.Sds;
 
-                        case 0x0:
-                            //00 for sparse file
+                    case 0x0:
+                        //00 for sparse file
 
-                            if (majorVer != 0 || minorVer != 0)
-                            {
-                                return FileType.Unknown;
-                            }
+                        if (majorVer != 0 || minorVer != 0)
+                        {
+                            return FileType.Unknown;
+                        }
 
-                            _logger.Debug("Found $J sig (0 size) and major/minor == 0)");
+                        _logger.Debug("Found $J sig (0 size) and major/minor == 0)");
+                        return FileType.UsnJournal;
+
+                    default:
+                        var isBootSig = BitConverter.ToInt32(buff, 3);
+                        if (isBootSig == bootSig)
+                        {
+                            _logger.Debug("Found $Boot sig");
+                            return FileType.Boot;
+                        }
+
+                        if (majorVer == 2 && minorVer == 0)
+                        {
+                            _logger.Debug("Found $J sig (Major == 2, Minor == 0)");
                             return FileType.UsnJournal;
+                        }
 
-                        default:
-                            var isBootSig = BitConverter.ToInt32(buff, 3);
-                            if (isBootSig == bootSig)
-                            {
-                                _logger.Debug("Found $Boot sig");
-                                return FileType.Boot;
-                            }
+                        var zeroOffset = BitConverter.ToUInt64(buff, 8);
 
-                            if (majorVer == 2 && minorVer == 0)
-                            {
-                                _logger.Debug("Found $J sig (Major == 2, Minor == 0)");
-                                return FileType.UsnJournal;
-                            }
+                        if (zeroOffset == 0 && sig32 != 0)
+                        {
+                            _logger.Debug("Found $SDS sig (Offset 0x8 as Int64 == 0");
+                            return FileType.Sds;
+                        }
 
-                            var zeroOffset = BitConverter.ToUInt64(buff, 8);
-
-                            if (zeroOffset == 0 && sig32 != 0)
-                            {
-                                _logger.Debug("Found $SDS sig (Offset 0x8 as Int64 == 0");
-                                return FileType.Sds;
-                            }
-
-                            break;
-                    }
+                        break;
+                }
 
                 _logger.Debug("Failed to find a signature! Returning unknown");
             }
