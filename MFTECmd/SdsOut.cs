@@ -23,5 +23,7 @@ namespace MFTECmd
 
         public ulong FileOffset { get;set; }
 
+        public string SourceFile { get; set; }
+
     }
 }

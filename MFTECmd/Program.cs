@@ -17,6 +17,7 @@ using MFT.Other;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using RawCopy;
 using SDS;
 using Secure;
 using ServiceStack;
@@ -26,7 +27,6 @@ using CsvWriter = CsvHelper.CsvWriter;
 using Directory = Alphaleonis.Win32.Filesystem.Directory;
 using File = Alphaleonis.Win32.Filesystem.File;
 using Path = Alphaleonis.Win32.Filesystem.Path;
-
 
 namespace MFTECmd
 {
@@ -140,12 +140,21 @@ namespace MFTECmd
                 .WithDescription(
                     "Include DOS file name types. Default is FALSE").SetDefault(false);
 
-
-
             _fluentCommandLineParser.Setup(arg => arg.AllTimeStampsAllTime)
                 .As("at")
                 .WithDescription(
                     "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10. Default is FALSE\r\n")
+                .SetDefault(false);
+
+            _fluentCommandLineParser.Setup(arg => arg.Vss)
+                .As("vss")
+                .WithDescription(
+                    "Process all Volume Shadow Copies that exist on drive specified by -f . Default is FALSE")
+                .SetDefault(false);
+            _fluentCommandLineParser.Setup(arg => arg.Dedupe)
+                .As("dedupe")
+                .WithDescription(
+                    "Deduplicate -f & VSCs based on SHA-1. First file found wins. Default is FALSE\r\n")
                 .SetDefault(false);
 
 
@@ -200,12 +209,11 @@ namespace MFTECmd
                 return;
             }
 
-            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty() == false )
+            if (_fluentCommandLineParser.Object.File.IsNullOrEmpty() == false)
             {
-
-                if (Path.GetDirectoryName(_fluentCommandLineParser.Object.File)?.Length == 3  )
+                if (Path.GetDirectoryName(_fluentCommandLineParser.Object.File)?.Length == 3)
                 {
-                  //OK
+                    //OK
                 }
                 else if (_fluentCommandLineParser.Object.File.ToUpperInvariant().Contains("$EXTEND\\$USNJRNL"))
                 {
@@ -215,7 +223,7 @@ namespace MFTECmd
                 {
                     //the path is off the root of the drive, so it works for things like $Boot, $MFT, etc
                     _logger.Warn($"File '{_fluentCommandLineParser.Object.File}' not found. Exiting");
-                    return;   
+                    return;
                 }
             }
 
@@ -250,7 +258,7 @@ namespace MFTECmd
             {
                 if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.CsvDirectory)) == false)
                 {
-                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;
                 }
             }
@@ -259,7 +267,7 @@ namespace MFTECmd
             {
                 if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.JsonDirectory)) == false)
                 {
-                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;
                 }
             }
@@ -268,7 +276,7 @@ namespace MFTECmd
             {
                 if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.BodyDirectory)) == false)
                 {
-                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;
                 }
             }
@@ -277,7 +285,7 @@ namespace MFTECmd
             {
                 if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.DumpEntry)) == false)
                 {
-                    _logger.Error($"Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                    _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                     return;
                 }
             }
@@ -363,11 +371,37 @@ namespace MFTECmd
             sw.Start();
             try
             {
-                Boot.Boot b = null;
+                Boot.Boot bf = null;
+
+                var bootFiles = new Dictionary<string, Boot.Boot>();
 
                 try
                 {
-                    b = BootFile.Load(_fluentCommandLineParser.Object.File);
+                    bf = BootFile.Load(_fluentCommandLineParser.Object.File);
+                    bootFiles.Add(_fluentCommandLineParser.Object.File, bf);
+
+                    var ll = new List<string>();
+
+                    if (_fluentCommandLineParser.Object.Vss)
+                    {
+                        var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
+
+                        var vssInfos = Helper.GetVssInfoViaWmi(dl);
+
+                        foreach (var vssInfo in vssInfos)
+                        {
+                            var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Boot";
+                            ll.Add(vsp);
+                        }
+                    }
+
+                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+
+                    foreach (var rawCopyReturn in rawFiles)
+                    {
+                        bf = new Boot.Boot(rawCopyReturn.FileStream);
+                        bootFiles.Add(rawCopyReturn.InputFilename, bf);
+                    }
                 }
                 catch (Exception)
                 {
@@ -378,46 +412,41 @@ namespace MFTECmd
                         var ll = new List<string>();
                         ll.Add(_fluentCommandLineParser.Object.File);
 
-                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
+                        if (_fluentCommandLineParser.Object.Vss)
+                        {
+                            var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
 
-                        b = new Boot.Boot(rawFiles.First().FileStream);
+                            var vssInfos = Helper.GetVssInfoViaWmi(dl);
+
+                            foreach (var vssInfo in vssInfos)
+                            {
+                                var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Boot";
+                                ll.Add(vsp);
+                            }
+                        }
+
+                        var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+
+                        foreach (var rawCopyReturn in rawFiles)
+                        {
+                            bf = new Boot.Boot(rawCopyReturn.FileStream);
+                            bootFiles.Add(rawCopyReturn.InputFilename, bf);
+                        }
                     }
                     catch (Exception e)
                     {
                         _logger.Error($"There was an error loading the file! Error: {e.Message}");
                         return;
                     }
-                    
                 }
 
                 sw.Stop();
-
                 _logger.Info(
                     $"Processed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
-
-                _logger.Info($"Boot entry point: {b.BootEntryPoint}");
-                _logger.Info($"File system signature: {b.FileSystemSignature}");
-                _logger.Info($"\r\nBytes per sector: {b.BytesPerSector:N0}");
-                _logger.Info($"Sectors per cluster: {b.SectorsPerCluster:N0}");
-                _logger.Info($"Cluster size: {b.BytesPerSector * b.SectorsPerCluster:N0}");
-                _logger.Info($"\r\nTotal sectors: {b.TotalSectors:N0}");
-                _logger.Info($"Reserved sectors: {b.ReservedSectors:N0}");
-                _logger.Info($"\r\n$MFT cluster block #: {b.MftClusterBlockNumber:N0}");
-                _logger.Info($"$MFTMirr cluster block #: {b.MirrorMftClusterBlockNumber:N0}");
-                _logger.Info($"\r\nFILE entry size: {b.MftEntrySize:N0}");
-                _logger.Info($"Index entry size: {b.IndexEntrySize:N0}");
-                _logger.Info($"\r\nVolume serial number raw: 0x{b.VolumeSerialNumberRaw:X}");
-                _logger.Info($"Volume serial number: {b.GetVolumeSerialNumber()}");
-                _logger.Info($"Volume serial number 32-bit: {b.GetVolumeSerialNumber(true)}");
-                _logger.Info($"Volume serial number 32-bit reversed: {b.GetVolumeSerialNumber(true, true)}");
-                _logger.Info($"\r\nSector signature: {b.GetSectorSignature()}\r\n");
-
-                _logger.Trace(b.Dump);
+                StreamWriter swCsv = null;
 
                 if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
                 {
-                    StreamWriter swCsv = null;
-
                     if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
                     {
                         _logger.Warn(
@@ -427,14 +456,12 @@ namespace MFTECmd
                         {
                             Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                         }
-                        catch (Exception )
+                        catch (Exception)
                         {
-                            _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                            _logger.Fatal(
+                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
                             return;
                         }
-
-
-                      
                     }
 
                     var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
@@ -457,33 +484,57 @@ namespace MFTECmd
                     _csvWriter.Configuration.RegisterClassMap(foo);
                     _csvWriter.WriteHeader<BootOut>();
                     _csvWriter.NextRecord();
+                }
+
+                foreach (var b in bootFiles)
+                {
+                    _logger.Error($"Boot file: {b.Key}");
+                    _logger.Info($"Boot entry point: {b.Value.BootEntryPoint}");
+                    _logger.Info($"File system signature: {b.Value.FileSystemSignature}");
+                    _logger.Info($"\r\nBytes per sector: {b.Value.BytesPerSector:N0}");
+                    _logger.Info($"Sectors per cluster: {b.Value.SectorsPerCluster:N0}");
+                    _logger.Info($"Cluster size: {b.Value.BytesPerSector * b.Value.SectorsPerCluster:N0}");
+                    _logger.Info($"\r\nTotal sectors: {b.Value.TotalSectors:N0}");
+                    _logger.Info($"Reserved sectors: {b.Value.ReservedSectors:N0}");
+                    _logger.Info($"\r\n$MFT cluster block #: {b.Value.MftClusterBlockNumber:N0}");
+                    _logger.Info($"$MFTMirr cluster block #: {b.Value.MirrorMftClusterBlockNumber:N0}");
+                    _logger.Info($"\r\nFILE entry size: {b.Value.MftEntrySize:N0}");
+                    _logger.Info($"Index entry size: {b.Value.IndexEntrySize:N0}");
+                    _logger.Info($"\r\nVolume serial number raw: 0x{b.Value.VolumeSerialNumberRaw:X}");
+                    _logger.Info($"Volume serial number: {b.Value.GetVolumeSerialNumber()}");
+                    _logger.Info($"Volume serial number 32-bit: {b.Value.GetVolumeSerialNumber(true)}");
+                    _logger.Info($"Volume serial number 32-bit reversed: {b.Value.GetVolumeSerialNumber(true, true)}");
+                    _logger.Info($"\r\nSector signature: {b.Value.GetSectorSignature()}\r\n");
+
+                    _logger.Trace(b.Value.Dump);
+
 
                     var bo = new BootOut
                     {
-                        EntryPoint = b.BootEntryPoint,
-                        Signature = b.FileSystemSignature,
-                        BytesPerSector = b.BytesPerSector,
-                        SectorsPerCluster = b.SectorsPerCluster,
-                        ReservedSectors = b.ReservedSectors,
-                        TotalSectors = b.TotalSectors,
-                        MftClusterBlockNumber = b.MftClusterBlockNumber,
-                        MftMirrClusterBlockNumber = b.MirrorMftClusterBlockNumber,
-                        MftEntrySize = b.MftEntrySize,
-                        IndexEntrySize = b.IndexEntrySize,
-                        VolumeSerialNumberRaw = $"0x{b.VolumeSerialNumberRaw:X}",
-                        VolumeSerialNumber = b.GetVolumeSerialNumber(),
-                        VolumeSerialNumber32 = b.GetVolumeSerialNumber(true),
-                        VolumeSerialNumber32Reverse = b.GetVolumeSerialNumber(true, true),
-                        SectorSignature = b.GetSectorSignature()
+                        EntryPoint = b.Value.BootEntryPoint,
+                        Signature = b.Value.FileSystemSignature,
+                        BytesPerSector = b.Value.BytesPerSector,
+                        SectorsPerCluster = b.Value.SectorsPerCluster,
+                        ReservedSectors = b.Value.ReservedSectors,
+                        TotalSectors = b.Value.TotalSectors,
+                        MftClusterBlockNumber = b.Value.MftClusterBlockNumber,
+                        MftMirrClusterBlockNumber = b.Value.MirrorMftClusterBlockNumber,
+                        MftEntrySize = b.Value.MftEntrySize,
+                        IndexEntrySize = b.Value.IndexEntrySize,
+                        VolumeSerialNumberRaw = $"0x{b.Value.VolumeSerialNumberRaw:X}",
+                        VolumeSerialNumber = b.Value.GetVolumeSerialNumber(),
+                        VolumeSerialNumber32 = b.Value.GetVolumeSerialNumber(true),
+                        VolumeSerialNumber32Reverse = b.Value.GetVolumeSerialNumber(true, true),
+                        SectorSignature = b.Value.GetSectorSignature(),
+                        SourceFile = b.Key
                     };
 
-
-                    _csvWriter.WriteRecord(bo);
-                    _csvWriter.NextRecord();
-
-                    swCsv.Flush();
-                    swCsv.Close();
+                    _csvWriter?.WriteRecord(bo);
+                    _csvWriter?.NextRecord();
                 }
+
+                swCsv?.Flush();
+                swCsv?.Close();
             }
             catch (Exception e)
             {
@@ -501,7 +552,7 @@ namespace MFTECmd
             {
                 _logger.Trace("Initializing $J");
 
-              //  j = UsnFile.Load(_fluentCommandLineParser.Object.File);
+                //  j = UsnFile.Load(_fluentCommandLineParser.Object.File);
 
                 try
                 {
@@ -516,11 +567,11 @@ namespace MFTECmd
                         var ll = new List<string>();
                         ll.Add(_fluentCommandLineParser.Object.File);
 
-                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
+                        var rawFiles = Helper.GetFiles(ll);
 
-                         var start = UsnFile.FindStartingOffset(rawFiles.First().FileStream);
+                        var start = UsnFile.FindStartingOffset(rawFiles.First().FileStream);
 
-                           rawFiles = RawCopy.Helper.GetFiles(ll);
+                        rawFiles = Helper.GetFiles(ll);
 
                         j = new Usn.Usn(rawFiles.First().FileStream, start);
                     }
@@ -529,9 +580,8 @@ namespace MFTECmd
                         _logger.Error($"There was an error loading the file! Error: {e.Message}");
                         return;
                     }
-                    
                 }
-                
+
 
                 _logger.Info($"Usn entries found: {j.UsnEntries.Count:N0}");
 
@@ -551,14 +601,12 @@ namespace MFTECmd
                     {
                         Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                     }
-                    catch (Exception )
+                    catch (Exception)
                     {
-                        _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                        _logger.Fatal(
+                            $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
                         return;
                     }
-
-
-
                 }
 
                 var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
@@ -628,7 +676,7 @@ namespace MFTECmd
 
                 try
                 {
-                    sds =SdsFile.Load(_fluentCommandLineParser.Object.File);
+                    sds = SdsFile.Load(_fluentCommandLineParser.Object.File);
                 }
                 catch (Exception)
                 {
@@ -639,7 +687,7 @@ namespace MFTECmd
                         var ll = new List<string>();
                         ll.Add(_fluentCommandLineParser.Object.File);
 
-                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
+                        var rawFiles = Helper.GetFiles(ll);
 
                         sds = new Sds(rawFiles.First().FileStream);
                     }
@@ -648,9 +696,7 @@ namespace MFTECmd
                         _logger.Error($"There was an error loading the file! Error: {e.Message}");
                         return;
                     }
-                    
                 }
-                
 
 
                 _logger.Info($"SDS entries found: {sds.SdsEntries.Count:N0}");
@@ -673,12 +719,12 @@ namespace MFTECmd
                         {
                             Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                         }
-                        catch (Exception )
+                        catch (Exception)
                         {
-                            _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                            _logger.Fatal(
+                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
                             return;
                         }
-
                     }
 
                     var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
@@ -864,7 +910,7 @@ namespace MFTECmd
 
         private static string BytesToString(long byteCount)
         {
-            string[] suf = { "B", "KB", "MB", "GB", "TB", "PB", "EB" }; //Longs run out around EB
+            string[] suf = {"B", "KB", "MB", "GB", "TB", "PB", "EB"}; //Longs run out around EB
             if (byteCount == 0)
             {
                 return "0" + suf[0];
@@ -891,7 +937,7 @@ namespace MFTECmd
                 var ll = new List<string>();
                 ll.Add(_fluentCommandLineParser.Object.File);
 
-                var  rawFiles = RawCopy.Helper.GetFiles(ll);
+                var rawFiles = Helper.GetFiles(ll);
 
                 _mft = new Mft(rawFiles.First().FileStream);
             }
@@ -900,8 +946,9 @@ namespace MFTECmd
                 _logger.Error($"There was an error loading the file! Error: {e.Message}");
                 return;
             }
-            
-            _logger.Info($"FILE records found: {_mft.FileRecords.Count:N0} (Free records: {_mft.FreeFileRecords.Count:N0}) File size: {BytesToString(_mft.FileSize)}\r\n");
+
+            _logger.Info(
+                $"FILE records found: {_mft.FileRecords.Count:N0} (Free records: {_mft.FreeFileRecords.Count:N0}) File size: {BytesToString(_mft.FileSize)}\r\n");
 
             sw.Stop();
 
@@ -924,12 +971,12 @@ namespace MFTECmd
                     {
                         Directory.CreateDirectory(_fluentCommandLineParser.Object.BodyDirectory);
                     }
-                    catch (Exception )
+                    catch (Exception)
                     {
-                        _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.BodyDirectory}'. Does a file with the same name exist? Exiting");
+                        _logger.Fatal(
+                            $"Unable to create directory '{_fluentCommandLineParser.Object.BodyDirectory}'. Does a file with the same name exist? Exiting");
                         return;
                     }
-           
                 }
 
                 var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.body";
@@ -997,12 +1044,12 @@ namespace MFTECmd
                         {
                             Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                         }
-                        catch (Exception )
+                        catch (Exception)
                         {
-                            _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
-                          return;
+                            _logger.Fatal(
+                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                            return;
                         }
-                      
                     }
 
                     var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.csv";
@@ -1134,13 +1181,12 @@ namespace MFTECmd
                     {
                         Directory.CreateDirectory(_fluentCommandLineParser.Object.JsonDirectory);
                     }
-                    catch (Exception )
+                    catch (Exception)
                     {
-                        _logger.Fatal($"Unable to create directory '{_fluentCommandLineParser.Object.JsonDirectory}'. Does a file with the same name exist? Exiting");
+                        _logger.Fatal(
+                            $"Unable to create directory '{_fluentCommandLineParser.Object.JsonDirectory}'. Does a file with the same name exist? Exiting");
                         return;
                     }
-
-                 
                 }
 
                 var outFile = Path.Combine(_fluentCommandLineParser.Object.JsonDirectory, outBase);
@@ -1151,20 +1197,20 @@ namespace MFTECmd
                 {
                     JsConfig.DateHandler = DateHandler.ISO8601;
 
-                    using (var sWrite = new StreamWriter(new FileStream(outFile,FileMode.OpenOrCreate,FileAccess.Write)))
+                    using (var sWrite =
+                        new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write)))
                     {
                         if (_mftOutRecords != null)
                         {
                             foreach (var mftOutRecord in _mftOutRecords)
                             {
-                                sWrite.WriteLine(mftOutRecord.ToJson());             
+                                sWrite.WriteLine(mftOutRecord.ToJson());
                             }
                         }
-                        
+
                         sWrite.Flush();
                         sWrite.Close();
                     }
-
                 }
                 catch (Exception e)
                 {
@@ -1234,7 +1280,8 @@ namespace MFTECmd
                 int entry;
                 int seq;
 
-                var key = String.Empty;;
+                var key = string.Empty;
+                ;
 
                 if (segs.Length == 2)
                 {
@@ -1242,7 +1289,8 @@ namespace MFTECmd
                         $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
                     return;
                 }
-                else if (segs.Length == 1)
+
+                if (segs.Length == 1)
                 {
                     if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
                     {
@@ -1267,11 +1315,12 @@ namespace MFTECmd
                     {
                         key = ff.First();
                     }
-                    else if (ff.Count>1)
+                    else if (ff.Count > 1)
                     {
                         //more than one, dump and return
                         Console.WriteLine();
-                        _logger.Warn("More than one FILE record found. Please specify one of the values below and try again!");
+                        _logger.Warn(
+                            "More than one FILE record found. Please specify one of the values below and try again!");
                         Console.WriteLine();
 
                         foreach (var f in ff)
@@ -1284,7 +1333,8 @@ namespace MFTECmd
                     else
                     {
                         Console.WriteLine();
-                        _logger.Warn("Could not find FILE record with specified Entry #. Use the --csv option and verify");
+                        _logger.Warn(
+                            "Could not find FILE record with specified Entry #. Use the --csv option and verify");
                         Console.WriteLine();
 
                         Environment.Exit(-1);
@@ -1294,33 +1344,30 @@ namespace MFTECmd
 
                 if (key.Length == 0)
                 {
+                    if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                    {
+                        var seg0 = segs[0].Replace("0x", "");
+                        var seg1 = segs[1].Replace("0x", "");
 
-                if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
-                {
-                    var seg0 = segs[0].Replace("0x", "");
-                    var seg1 = segs[1].Replace("0x", "");
+                        entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
+                        seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
+                    }
+                    else
+                    {
+                        entryOk = int.TryParse(segs[0], out entry);
+                        seqOk = int.TryParse(segs[1], out seq);
+                    }
 
-                    entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
-                    seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
+                    if (entryOk == false || seqOk == false)
+                    {
+                        _logger.Warn(
+                            $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
+                        return;
+                    }
+
+                    key = $"{entry:X8}-{seq:X8}";
                 }
-                else
-                {
-                    entryOk = int.TryParse(segs[0], out entry);
-                    seqOk = int.TryParse(segs[1], out seq);
-                }
 
-                if ( entryOk == false || seqOk == false)
-                {
-                    _logger.Warn(
-                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
-                    return;
-                }
-
-                key = $"{entry:X8}-{seq:X8}";
-                }
-
-
-                
 
                 if (_mft.FileRecords.ContainsKey(key))
                 {
@@ -1345,12 +1392,12 @@ namespace MFTECmd
                     var name = key;
                     if (fn != null)
                     {
-                        var pp =  _mft.GetFullParentPath(key);
+                        var pp = _mft.GetFullParentPath(key);
                         name = $"{pp}";
                     }
 
                     _logger.Warn($"Contents for '{name}':\r\n");
-                    _logger.Info($"Key\t\t\tName");
+                    _logger.Info("Key\t\t\tName");
                     foreach (var parentMapEntry in dlist)
                     {
                         if (parentMapEntry.IsDirectory)
@@ -1371,8 +1418,6 @@ namespace MFTECmd
 
                     _logger.Info(fr);
                 }
-
-               
             }
 
             #endregion
@@ -1406,7 +1451,7 @@ namespace MFTECmd
 
                     try
                     {
-                        var  rawFiles = RawCopy.Helper.GetFiles(ll);
+                        var rawFiles = Helper.GetFiles(ll);
 
                         rawFiles.First().FileStream.Read(buff, 0, 50);
                     }
@@ -1423,7 +1468,6 @@ namespace MFTECmd
                     _logger.Fatal(
                         $"\r\nNot enough data found in '{_fluentCommandLineParser.Object.File}'. Is the file empty? Exiting\r\n");
                     Environment.Exit(-1);
-
                 }
 
                 var sig32 = BitConverter.ToInt32(buff, 0);
@@ -1874,6 +1918,8 @@ namespace MFTECmd
         public bool Fls { get; set; }
         public bool Debug { get; set; }
         public bool Trace { get; set; }
+        public bool Vss { get; set; }
+        public bool Dedupe { get; set; }
 
         public string BodyDirectory { get; set; }
         public string BodyDriveLetter { get; set; }

@@ -18,5 +18,6 @@
         public string VolumeSerialNumber32 { get; set; }
         public string VolumeSerialNumber32Reverse { get; set; }
         public string SectorSignature { get; set; }
+        public string SourceFile { get; set; }
     }
 }
