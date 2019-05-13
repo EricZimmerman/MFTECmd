@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MFTECmd
+﻿namespace MFTECmd
 {
-   public class SdsOut
+    public class SdsOut
     {
         public string Hash { get; set; }
         public uint Id { get; set; }
@@ -21,9 +15,8 @@ namespace MFTECmd
         public int DaclAceCount { get; set; }
         public string UniqueDaclAceTypes { get; set; }
 
-        public ulong FileOffset { get;set; }
+        public ulong FileOffset { get; set; }
 
         public string SourceFile { get; set; }
-
     }
 }

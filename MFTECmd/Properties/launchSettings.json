@@ -2,7 +2,7 @@
   "profiles": {
     "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": "-f \"c:\\$Secure:$SDS\" --csv C:\\Temp\\ --vss --trace --dedupe"
+      "commandLineArgs": "-f \"c:\\$MFT\" --csv C:\\Temp\\ --vss "
     }
   }
 }
