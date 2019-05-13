@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
 using Boot;
 using Exceptionless;
 using Fclp;
@@ -250,6 +251,12 @@ namespace MFTECmd
             LogManager.ReconfigExistingLoggers();
 
 
+            if (_fluentCommandLineParser.Object.Vss & (IsAdministrator() == false))
+            {
+                _logger.Error("--vss is present, but administrator rights not found. Exiting\r\n");
+                return;
+            }
+
             //determine file type
             var ft = GetFileType(_fluentCommandLineParser.Object.File);
             _logger.Warn($"File type: {ft}\r\n");
@@ -464,7 +471,7 @@ namespace MFTECmd
                         }
                     }
 
-                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
+                    var outName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
 
                     if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
                     {
@@ -609,7 +616,7 @@ namespace MFTECmd
                     }
                 }
 
-                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
+                var outName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
 
                 if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
                 {
@@ -674,9 +681,35 @@ namespace MFTECmd
             {
                 Sds sds = null;
 
+                var sdsFiles = new Dictionary<string, Sds>();
+
                 try
                 {
                     sds = SdsFile.Load(_fluentCommandLineParser.Object.File);
+                    sdsFiles.Add(_fluentCommandLineParser.Object.File, sds);
+
+                    var ll = new List<string>();
+
+                    if (_fluentCommandLineParser.Object.Vss)
+                    {
+                        var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
+
+                        var vssInfos = Helper.GetVssInfoViaWmi(dl);
+
+                        foreach (var vssInfo in vssInfos)
+                        {
+                            var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Secure:$SDS";
+                            ll.Add(vsp);
+                        }
+                    }
+
+                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+
+                    foreach (var rawCopyReturn in rawFiles)
+                    {
+                        sds = new Sds(rawCopyReturn.FileStream);
+                        sdsFiles.Add(rawCopyReturn.InputFilename, sds);
+                    }
                 }
                 catch (Exception)
                 {
@@ -687,9 +720,26 @@ namespace MFTECmd
                         var ll = new List<string>();
                         ll.Add(_fluentCommandLineParser.Object.File);
 
-                        var rawFiles = Helper.GetFiles(ll);
+                        if (_fluentCommandLineParser.Object.Vss)
+                        {
+                            var dl = Path.GetPathRoot(_fluentCommandLineParser.Object.File);
 
-                        sds = new Sds(rawFiles.First().FileStream);
+                            var vssInfos = Helper.GetVssInfoViaWmi(dl);
+
+                            foreach (var vssInfo in vssInfos)
+                            {
+                                var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Secure:$SDS";
+                                ll.Add(vsp);
+                            }
+                        }
+
+                        var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+
+                        foreach (var rawCopyReturn in rawFiles)
+                        {
+                            sds = new Sds(rawCopyReturn.FileStream);
+                            sdsFiles.Add(rawCopyReturn.InputFilename, sds);
+                        }
                     }
                     catch (Exception e)
                     {
@@ -698,106 +748,133 @@ namespace MFTECmd
                     }
                 }
 
-
-                _logger.Info($"SDS entries found: {sds.SdsEntries.Count:N0}");
-
                 sw.Stop();
 
                 _logger.Info(
                     $"\r\nProcessed '{_fluentCommandLineParser.Object.File}' in {sw.Elapsed.TotalSeconds:N4} seconds");
+                Console.WriteLine();
 
-                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+                var dt = DateTimeOffset.UtcNow;
+
+                foreach (var sdsFile in sdsFiles)
                 {
-                    StreamWriter swCsv = null;
+                    _logger.Info($"SDS entries found: {sdsFile.Value.SdsEntries.Count:N0}");
 
-                    if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
                     {
-                        _logger.Warn(
-                            $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                        StreamWriter swCsv = null;
 
-                        try
+                        if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
                         {
-                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
-                        }
-                        catch (Exception)
-                        {
-                            _logger.Fatal(
-                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
-                            return;
-                        }
-                    }
+                            _logger.Warn(
+                                $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
 
-                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
-
-                    if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
-                    {
-                        outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
-                    }
-
-                    var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
-
-                    _logger.Warn($"\r\nCSV output will be saved to '{outFile}'\r\n");
-
-                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
-
-                    _csvWriter = new CsvWriter(swCsv);
-
-                    var foo = _csvWriter.Configuration.AutoMap<SdsOut>();
-
-//                foo.Map(t => t.UpdateTimestamp).ConvertUsing(t =>
-//                    $"{t.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
-
-                    _csvWriter.Configuration.RegisterClassMap(foo);
-
-                    _csvWriter.WriteHeader<SdsOut>();
-                    _csvWriter.NextRecord();
-
-                    foreach (var sdsEntry in sds.SdsEntries)
-                    {
-                        var sdO = new SdsOut
-                        {
-                            Hash = sdsEntry.Hash,
-                            Id = sdsEntry.Id,
-                            Offset = sdsEntry.Offset,
-                            OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
-                            GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
-                            Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ", "|"),
-                            FileOffset = sdsEntry.FileOffset
-                        };
-
-                        if (sdsEntry.SecurityDescriptor.Sacl != null)
-                        {
-                            sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
-                            var uniqueAce = new HashSet<string>();
-                            foreach (var saclAceRecord in sdsEntry.SecurityDescriptor.Sacl.AceRecords)
+                            try
                             {
-                                uniqueAce.Add(saclAceRecord.AceType.ToString());
+                                Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
                             }
-
-                            sdO.UniqueSaclAceTypes = string.Join("|", uniqueAce);
-                        }
-
-                        if (sdsEntry.SecurityDescriptor.Dacl != null)
-                        {
-                            sdO.DaclAceCount = sdsEntry.SecurityDescriptor.Dacl.AceCount;
-                            var uniqueAce = new HashSet<string>();
-                            foreach (var daclAceRecord in sdsEntry.SecurityDescriptor.Dacl.AceRecords)
+                            catch (Exception)
                             {
-                                uniqueAce.Add(daclAceRecord.AceType.ToString());
+                                _logger.Fatal(
+                                    $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                                return;
                             }
-
-                            sdO.UniqueDaclAceTypes = string.Join("|", uniqueAce);
                         }
 
-                        _logger.Trace(sdsEntry.SecurityDescriptor);
+                        string outName = string.Empty;
+                        string outFile = string.Empty;
 
-                        _csvWriter.WriteRecord(sdO);
+                        if (sdsFile.Key.StartsWith("\\\\.\\"))
+                        {
+                            //vsc
+                            // \\\\.\\HardDiskVolumeShadowCopy3\$Secure:$SDS
+                            // \\\\.\\HardDiskVolumeShadowCopy8\$Secure:$SDS
+
+                            var vssNumber = Helper.GetVssNumberFromPath(sdsFile.Key);
+                            var vssTime = Helper.GetVssCreationDate(vssNumber);
+
+                            outName = $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$SDS_Output.csv";
+                            
+                            if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                            {
+                                outName = $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.CsvName)}";
+                            }
+                        }
+                        else
+                        {
+                            //normal file
+                            outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
+
+                            if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                            {
+                                outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                            }
+                        }
+                       
+                        outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+
+                        _logger.Warn($"\r\nCSV output will be saved to '{outFile}'\r\n");
+
+                        swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+
+                        _csvWriter = new CsvWriter(swCsv);
+
+                        var foo = _csvWriter.Configuration.AutoMap<SdsOut>();
+
+                        _csvWriter.Configuration.RegisterClassMap(foo);
+
+                        _csvWriter.WriteHeader<SdsOut>();
                         _csvWriter.NextRecord();
-                    }
 
-                    swCsv.Flush();
-                    swCsv.Close();
+                        foreach (var sdsEntry in sdsFile.Value.SdsEntries)
+                        {
+                            var sdO = new SdsOut
+                            {
+                                Hash = sdsEntry.Hash,
+                                Id = sdsEntry.Id,
+                                Offset = sdsEntry.Offset,
+                                OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
+                                GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
+                                Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ", "|"),
+                                FileOffset = sdsEntry.FileOffset,
+                                SourceFile = sdsFile.Key
+                            };
+
+                            if (sdsEntry.SecurityDescriptor.Sacl != null)
+                            {
+                                sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
+                                var uniqueAce = new HashSet<string>();
+                                foreach (var saclAceRecord in sdsEntry.SecurityDescriptor.Sacl.AceRecords)
+                                {
+                                    uniqueAce.Add(saclAceRecord.AceType.ToString());
+                                }
+
+                                sdO.UniqueSaclAceTypes = string.Join("|", uniqueAce);
+                            }
+
+                            if (sdsEntry.SecurityDescriptor.Dacl != null)
+                            {
+                                sdO.DaclAceCount = sdsEntry.SecurityDescriptor.Dacl.AceCount;
+                                var uniqueAce = new HashSet<string>();
+                                foreach (var daclAceRecord in sdsEntry.SecurityDescriptor.Dacl.AceRecords)
+                                {
+                                    uniqueAce.Add(daclAceRecord.AceType.ToString());
+                                }
+
+                                sdO.UniqueDaclAceTypes = string.Join("|", uniqueAce);
+                            }
+
+                            _logger.Trace(sdsEntry.SecurityDescriptor);
+
+                            _csvWriter.WriteRecord(sdO);
+                            _csvWriter.NextRecord();
+                        }
+
+                        swCsv.Flush();
+                        swCsv.Close();
+                    }
                 }
+
 
                 if (_fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty() == false)
                 {
@@ -822,63 +899,65 @@ namespace MFTECmd
                         return;
                     }
 
-                    var sd = sds.SdsEntries.FirstOrDefault(t => t.Id == secId);
-
-                    if (sd == null)
+                    foreach (var sds1 in sdsFiles)
                     {
-                        _logger.Warn($"Could not find entry with Id: {secId}");
-                        return;
-                    }
+                        var sd = sds1.Value.SdsEntries.FirstOrDefault(t => t.Id == secId);
 
-                    _logger.Info("");
-                    _logger.Fatal($"Details for security record # {sd.Id} (0x{sd.Id:X})");
-                    _logger.Info($"Hash value: {sd.Hash}, Offset: 0x{sd.Offset:X}");
-                    _logger.Info($"Control flags: {sd.SecurityDescriptor.Control.ToString().Replace(", ", " | ")}");
-                    _logger.Info("");
+                        if (sd == null)
+                        {
+                            _logger.Warn($"Could not find entry with Id: {secId}");
+                            continue;
+                        }
 
-
-                    if (sd.SecurityDescriptor.OwnerSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
-                    {
-                        _logger.Info($"Owner SID: {sd.SecurityDescriptor.OwnerSid}");
-                    }
-                    else
-                    {
-                        _logger.Info(
-                            $"Owner SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.OwnerSidType)}");
-                    }
-
-                    if (sd.SecurityDescriptor.GroupSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
-                    {
-                        _logger.Info($"Group SID: {sd.SecurityDescriptor.GroupSid}");
-                    }
-                    else
-                    {
-                        _logger.Info(
-                            $"Group SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.GroupSidType)}");
-                    }
-
-
-                    if (sd.SecurityDescriptor.Dacl != null)
-                    {
+                        _logger.Info("");
+                        _logger.Fatal($"Details for security record # {sd.Id} (0x{sd.Id:X}), Found in '{sds1.Key}'");
+                        _logger.Info($"Hash value: {sd.Hash}, Offset: 0x{sd.Offset:X}");
+                        _logger.Info($"Control flags: {sd.SecurityDescriptor.Control.ToString().Replace(", ", " | ")}");
                         _logger.Info("");
 
-                        _logger.Error("Discretionary Access Control List");
-                        DumpAcl(sd.SecurityDescriptor.Dacl);
+                        if (sd.SecurityDescriptor.OwnerSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
+                        {
+                            _logger.Info($"Owner SID: {sd.SecurityDescriptor.OwnerSid}");
+                        }
+                        else
+                        {
+                            _logger.Info(
+                                $"Owner SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.OwnerSidType)}");
+                        }
+
+                        if (sd.SecurityDescriptor.GroupSidType == Helpers.SidTypeEnum.UnknownOrUserSid)
+                        {
+                            _logger.Info($"Group SID: {sd.SecurityDescriptor.GroupSid}");
+                        }
+                        else
+                        {
+                            _logger.Info(
+                                $"Group SID: {Helpers.GetDescriptionFromEnumValue(sd.SecurityDescriptor.GroupSidType)}");
+                        }
+
+                        if (sd.SecurityDescriptor.Dacl != null)
+                        {
+                            _logger.Info("");
+
+                            _logger.Error("Discretionary Access Control List");
+                            DumpAcl(sd.SecurityDescriptor.Dacl);
+                        }
+
+                        if (sd.SecurityDescriptor.Sacl != null)
+                        {
+                            _logger.Info("");
+
+                            _logger.Error("System Access Control List");
+                            DumpAcl(sd.SecurityDescriptor.Sacl);
+                        }
                     }
 
-                    if (sd.SecurityDescriptor.Sacl != null)
-                    {
-                        _logger.Info("");
-
-                        _logger.Error("System Access Control List");
-                        DumpAcl(sd.SecurityDescriptor.Sacl);
-                    }
                 }
             }
             catch (Exception e)
             {
                 _logger.Error(
-                    $"There was an error loading the file! Last offset processed: 0x{Sds.LastOffset:X}. Error: {e.Message}");
+                    $"There was an error loading the file! Error: {e.Message}");
             }
         }
 
@@ -979,7 +1058,7 @@ namespace MFTECmd
                     }
                 }
 
-                var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.body";
+                var outName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}_MFTECmd_Output.body";
 
                 if (_fluentCommandLineParser.Object.BodyName.IsNullOrEmpty() == false)
                 {
@@ -1052,7 +1131,7 @@ namespace MFTECmd
                         }
                     }
 
-                    var outName = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.csv";
+                    var outName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.csv";
 
                     if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
                     {
@@ -1165,7 +1244,7 @@ namespace MFTECmd
             {
                 //write json
 
-                var outBase = $"{DateTimeOffset.Now:yyyyMMddHHmmss}_MFTECmd_Output.json";
+                var outBase = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}_MFTECmd_Output.json";
 
                 if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
                 {
