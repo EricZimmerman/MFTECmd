@@ -1134,15 +1134,23 @@ namespace MFTECmd
                     }
                 }
 
-                var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
-
-                foreach (var rawCopyReturn in rawFiles)
+                try
                 {
-                    localMft = new Mft(rawCopyReturn.FileStream);
-                    mftFiles.Add(rawCopyReturn.InputFilename, localMft);
-                }
+                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
 
-                _mft = mftFiles.First().Value;
+                    foreach (var rawCopyReturn in rawFiles)
+                    {
+                        localMft = new Mft(rawCopyReturn.FileStream);
+                        mftFiles.Add(rawCopyReturn.InputFilename, localMft);
+                    }
+
+                    _mft = mftFiles.First().Value;
+                }
+                catch (Exception e)
+                {
+                    _logger.Error($"There was an error loading the file! Error: {e.Message}");
+                    return;
+                }
             }
             catch (Exception e)
             {
