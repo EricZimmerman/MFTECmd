@@ -398,15 +398,16 @@ namespace MFTECmd
                             var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Boot";
                             ll.Add(vsp);
                         }
+                        var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                        
+                        foreach (var rawCopyReturn in rawFiles) 
+                        { 
+                            bf = new Boot.Boot(rawCopyReturn.FileStream); 
+                            bootFiles.Add(rawCopyReturn.InputFilename, bf);
+                        }
                     }
 
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
-
-                    foreach (var rawCopyReturn in rawFiles)
-                    {
-                        bf = new Boot.Boot(rawCopyReturn.FileStream);
-                        bootFiles.Add(rawCopyReturn.InputFilename, bf);
-                    }
+                  
                 }
                 catch (Exception)
                 {
@@ -586,17 +587,19 @@ namespace MFTECmd
                             var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Extend\\$UsnJrnl:$J";
                             ll.Add(vsp);
                         }
+
+                        var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+
+                        foreach (var rawCopyReturn in rawFiles)
+                        {
+                            var start = UsnFile.FindStartingOffset(rawCopyReturn.FileStream);
+
+                            j = new Usn.Usn(rawCopyReturn.FileStream, start);
+                            jFiles.Add(rawCopyReturn.InputFilename, j);
+                        }
                     }
 
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
-
-                    foreach (var rawCopyReturn in rawFiles)
-                    {
-                        var start = UsnFile.FindStartingOffset(rawCopyReturn.FileStream);
-
-                        j = new Usn.Usn(rawCopyReturn.FileStream, start);
-                        jFiles.Add(rawCopyReturn.InputFilename, j);
-                    }
+                 
                 }
                 catch (Exception)
                 {
@@ -785,15 +788,16 @@ namespace MFTECmd
                             var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Secure:$SDS";
                             ll.Add(vsp);
                         }
+                        var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+
+                        foreach (var rawCopyReturn in rawFiles)
+                        {
+                            sds = new Sds(rawCopyReturn.FileStream);
+                            sdsFiles.Add(rawCopyReturn.InputFilename, sds);
+                        }
                     }
 
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
-
-                    foreach (var rawCopyReturn in rawFiles)
-                    {
-                        sds = new Sds(rawCopyReturn.FileStream);
-                        sdsFiles.Add(rawCopyReturn.InputFilename, sds);
-                    }
+                   
                 }
                 catch (Exception)
                 {
@@ -1104,14 +1108,14 @@ namespace MFTECmd
                         var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$MFT";
                         ll.Add(vsp);
                     }
-                }
 
-                var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
 
-                foreach (var rawCopyReturn in rawFiles)
-                {
-                    localMft = new Mft(rawCopyReturn.FileStream);
-                    mftFiles.Add(rawCopyReturn.InputFilename, localMft);
+                    foreach (var rawCopyReturn in rawFiles)
+                    {
+                        localMft = new Mft(rawCopyReturn.FileStream);
+                        mftFiles.Add(rawCopyReturn.InputFilename, localMft);
+                    }
                 }
             }
             catch (UnauthorizedAccessException)
