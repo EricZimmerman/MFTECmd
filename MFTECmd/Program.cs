@@ -2073,12 +2073,12 @@ namespace MFTECmd
 
             mftr.LogfileSequenceNumber = fr.LogSequenceNumber;
 
-            var oid = (ObjectId) fr.Attributes.SingleOrDefault(t =>
+            var oid = (ObjectId_) fr.Attributes.SingleOrDefault(t =>
                 t.AttributeType == AttributeType.VolumeVersionObjectId);
 
             if (oid != null)
             {
-                mftr.ObjectIdFileDroid = oid.FileDroid.ToString();
+                mftr.ObjectIdFileDroid = oid.ObjectId.ToString();
             }
 
             var lus = (LoggedUtilityStream) fr.Attributes.FirstOrDefault(t =>
