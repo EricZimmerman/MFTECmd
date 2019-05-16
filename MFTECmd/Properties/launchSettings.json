@@ -2,7 +2,7 @@
   "profiles": {
     "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": "-f C:\\Temp\\$MFT --csv C:\\Temp\\"
+      "commandLineArgs": "-f C:\\$MFT --body d:\\timeline --bodyf baserd01-mftecmd.body --blf --bdl C:"
     }
   }
 }

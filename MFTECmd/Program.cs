@@ -1219,7 +1219,7 @@ namespace MFTECmd
                         if (_fluentCommandLineParser.Object.BodyName.IsNullOrEmpty() == false)
                         {
                             outName =
-                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.CsvName)}";
+                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.BodyName)}";
                         }
                     }
                     else
@@ -1229,7 +1229,7 @@ namespace MFTECmd
 
                         if (_fluentCommandLineParser.Object.BodyName.IsNullOrEmpty() == false)
                         {
-                            outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                            outName = Path.GetFileName(_fluentCommandLineParser.Object.BodyName);
                         }
                     }
 
