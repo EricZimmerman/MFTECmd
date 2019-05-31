@@ -288,6 +288,12 @@ namespace MFTECmd
 
             if (_fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty() == false)
             {
+                if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty())
+                {
+
+                    _logger.Error("--do option missing. Exiting\r\n");
+                    return;
+                }
                 if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.DumpEntry)) == false)
                 {
                     _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
