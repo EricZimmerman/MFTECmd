@@ -1893,6 +1893,7 @@ namespace MFTECmd
                     {
                         var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
                         adsRecord.IsAds = true;
+                        adsRecord.OtherAttributeId = adsInfo.AttributeId;
                         _csvWriter?.WriteRecord(adsRecord);
 
                         _mftOutRecords?.Add(adsRecord);
@@ -2052,6 +2053,8 @@ namespace MFTECmd
             {
                 mftr.FileName = $"{mftr.FileName}:{adsinfo.Name}";
                 mftr.FileSize = adsinfo.Size;
+
+                
 
                 try
                 {
