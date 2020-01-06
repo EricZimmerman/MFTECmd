@@ -927,6 +927,8 @@ namespace MFTECmd
 
                         foreach (var sdsEntry in sdsFile.Value.SdsEntries)
                         {
+                            _logger.Debug($"Processing Id '{sdsEntry.Id}'");
+
                             var sdO = new SdsOut
                             {
                                 Hash = sdsEntry.Hash,
@@ -939,7 +941,7 @@ namespace MFTECmd
                                 SourceFile = sdsFile.Key
                             };
 
-                            if (sdsEntry.SecurityDescriptor.Sacl != null)
+                            if (sdsEntry.SecurityDescriptor.Sacl != null && sdsEntry.SecurityDescriptor.Sacl.RawBytes.Length> 0)
                             {
                                 sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
                                 var uniqueAce = new HashSet<string>();
