@@ -421,8 +421,7 @@ namespace MFTECmd
                     {
                         _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
 
-                        var ll = new List<string>();
-                        ll.Add(_fluentCommandLineParser.Object.File);
+                        var ll = new List<string> {_fluentCommandLineParser.Object.File};
 
                         if (_fluentCommandLineParser.Object.Vss)
                         {
@@ -498,7 +497,7 @@ namespace MFTECmd
 
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
-                    _csvWriter = new CsvWriter(swCsv);
+                    _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
 
                     var foo = _csvWriter.Configuration.AutoMap<BootOut>();
 
@@ -613,8 +612,7 @@ namespace MFTECmd
                     {
                         _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
 
-                        var ll = new List<string>();
-                        ll.Add(_fluentCommandLineParser.Object.File);
+                        var ll = new List<string> {_fluentCommandLineParser.Object.File};
 
                         if (_fluentCommandLineParser.Object.Vss)
                         {
@@ -718,7 +716,7 @@ namespace MFTECmd
 
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
-                    _csvWriter = new CsvWriter(swCsv);
+                    _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
 
                     var foo = _csvWriter.Configuration.AutoMap<JEntryOut>();
 
@@ -811,8 +809,7 @@ namespace MFTECmd
                     {
                         _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
 
-                        var ll = new List<string>();
-                        ll.Add(_fluentCommandLineParser.Object.File);
+                        var ll = new List<string> {_fluentCommandLineParser.Object.File};
 
                         if (_fluentCommandLineParser.Object.Vss)
                         {
@@ -916,7 +913,7 @@ namespace MFTECmd
 
                         swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
-                        _csvWriter = new CsvWriter(swCsv);
+                        _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
 
                         var foo = _csvWriter.Configuration.AutoMap<SdsOut>();
 
@@ -1130,8 +1127,7 @@ namespace MFTECmd
             {
                 _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
 
-                var ll = new List<string>();
-                ll.Add(_fluentCommandLineParser.Object.File);
+                var ll = new List<string> {_fluentCommandLineParser.Object.File};
 
                 if (_fluentCommandLineParser.Object.Vss)
                 {
@@ -1253,7 +1249,7 @@ namespace MFTECmd
                             swBody.NewLine = "\n";
                         }
 
-                        _bodyWriter = new CsvWriter(swBody);
+                        _bodyWriter = new CsvWriter(swBody,CultureInfo.InvariantCulture);
                         _bodyWriter.Configuration.Delimiter = "|";
 
                         var foo = _bodyWriter.Configuration.AutoMap<BodyFile>();
@@ -1340,7 +1336,7 @@ namespace MFTECmd
                         {
                             swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
 
-                            _csvWriter = new CsvWriter(swCsv);
+                            _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
 
                             var foo = _csvWriter.Configuration.AutoMap<MFTRecordOut>();
 
@@ -1747,8 +1743,7 @@ namespace MFTECmd
                 }
                 catch (Exception)
                 {
-                    var ll = new List<string>();
-                    ll.Add(file);
+                    var ll = new List<string> {file};
 
                     try
                     {
