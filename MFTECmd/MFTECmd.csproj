@@ -27,9 +27,9 @@
       <PackageReference Include="AlphaFS" Version="2.2.6" />
       <PackageReference Include="Costura.Fody" Version="4.1.0" />
       <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
-      <PackageReference Include="NLog" Version="4.6.8" />
-      <PackageReference Include="CsvHelper" Version="15.0.0" />
-      <PackageReference Include="Exceptionless" Version="4.3.2027" />
+      <PackageReference Include="NLog" Version="4.7.0" />
+      <PackageReference Include="CsvHelper" Version="15.0.4" />
+      <PackageReference Include="Exceptionless" Version="4.4.0" />
       <PackageReference Include="ServiceStack.Text" Version="5.8.0" />
       <PackageReference Include="System.Security.Principal.Windows" Version="4.7.0" />
       <PackageReference Include="System.ValueTuple" Version="4.5.0" />
