@@ -2,7 +2,7 @@
   "profiles": {
     "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": " -f C:\\Temp\\sds.vss313.bin --csv C:\\Temp\\"
+      "commandLineArgs": "-f \"C:\\Temp\\aaa\\$MFT\" --body C:\\Temp\\aaa --bdl c"
     }
   }
 }
