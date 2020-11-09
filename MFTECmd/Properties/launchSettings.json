@@ -2,7 +2,7 @@
   "profiles": {
     "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": "-f \"C:\\Temp\\aaa\\$MFT\" --body C:\\Temp\\aaa --bdl c"
+      "commandLineArgs": "-f C:\\Temp\\APAC_MFT --de 42537"
     }
   }
 }

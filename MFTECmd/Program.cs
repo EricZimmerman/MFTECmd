@@ -1243,7 +1243,7 @@ namespace MFTECmd
 
                     try
                     {
-                        swBody = new StreamWriter(outFile, false, Encoding.GetEncoding(1252), 4096 * 4);
+                        swBody = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
                         if (_fluentCommandLineParser.Object.UseCR)
                         {
                             swBody.NewLine = "\n";
