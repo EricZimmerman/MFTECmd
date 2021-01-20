@@ -55,4 +55,25 @@ namespace MFTECmd
         public int FnAttributeId { get; set; }
         public int OtherAttributeId { get; set; }
     }
+
+    public class FileListEntry
+    {
+        public string FullPath { get; set; }
+        public string Extension { get; set; }
+
+        public bool IsDirectory { get; set; }
+        public ulong FileSize { get; set; }
+        public DateTimeOffset? Created0x10 { get; set; }
+        public DateTimeOffset? LastModified0x10 { get; set; }
+
+        public FileListEntry(MFTRecordOut r)
+        {
+            FullPath = $"{r.ParentPath}\\{r.FileName}";
+            Extension = r.Extension;
+            IsDirectory = r.IsDirectory;
+            FileSize = r.FileSize;
+            Created0x10 = r.Created0x10;
+            LastModified0x10 = r.LastModified0x10;
+        }
+    }
 }

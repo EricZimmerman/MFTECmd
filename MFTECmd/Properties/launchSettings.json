@@ -2,7 +2,7 @@
   "profiles": {
     "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": "-f C:\\Temp\\APAC_MFT --de 42537"
+      "commandLineArgs": "-f E:\\Egnyte\\Private\\ezimmerman\\MFTs\\$MFT_HinesExt --csv C:\\Temp\\ --fl"
     }
   }
 }
