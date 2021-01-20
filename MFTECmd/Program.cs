@@ -1362,10 +1362,9 @@ namespace MFTECmd
 
                             _fileListWriter.Context.RegisterClassMap(foo);
                             foo.Map(t => t.Created0x10).Convert(t =>
-                                $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
+                                $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
                             foo.Map(t => t.LastModified0x10).Convert(t =>
-                                    $"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
-                                .Index(21);
+                                    $"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
 
                             _fileListWriter.WriteHeader<FileListEntry>();
                             _fileListWriter.NextRecord();
