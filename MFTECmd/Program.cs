@@ -1353,6 +1353,11 @@ namespace MFTECmd
                         {
                             var outFileFl = outFile.Replace("$MFT_Output", "$MFT_Output_FileListing");
 
+                            if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                            {
+                                outFileFl = Path.Combine(Path.GetDirectoryName(outFileFl),$"{Path.GetFileNameWithoutExtension(outFileFl)}_FileListing{Path.GetExtension(outFileFl)}");
+                            }
+
                             _logger.Warn($"\tCSV file listing output will be saved to '{outFileFl}'");
 
                             swFileList = new StreamWriter(outFileFl, false, Encoding.UTF8);
