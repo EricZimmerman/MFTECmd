@@ -293,21 +293,7 @@ namespace MFTECmd
                 }
             }
 
-            if (_fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty() == false)
-            {
-                if (_fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty())
-                {
-
-                    _logger.Error("--do option missing. Exiting\r\n");
-                    return;
-                }
-                if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.DumpEntry)) == false)
-                {
-                    _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
-                    return;
-                }
-            }
-
+        
             switch (ft)
             {
                 case FileType.Mft:
@@ -331,6 +317,23 @@ namespace MFTECmd
                         _logger.Warn("--bdl is required when using --body. Exiting");
                         return;
                     }
+
+                    if (_fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty() == false)
+                    {
+                        if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty())
+                        {
+
+                            _logger.Error("--dd option missing. Exiting\r\n");
+                            return;
+                        }
+                        if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.DumpDir)) == false)
+                        {
+                            _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                            return;
+                        }
+                    }
+
+
 
                     if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty() == false &&
                         _fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty())
@@ -731,7 +734,7 @@ namespace MFTECmd
                     var foo = _csvWriter.Context.AutoMap<JEntryOut>();
 
                     foo.Map(t => t.UpdateTimestamp).Convert(t =>
-                        $"{t.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+                        $"{t.Value.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
 
                     _csvWriter.Context.RegisterClassMap(foo);
 
@@ -1367,9 +1370,9 @@ namespace MFTECmd
 
                             _fileListWriter.Context.RegisterClassMap(foo);
                             foo.Map(t => t.Created0x10).Convert(t =>
-                                $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+                                $"{t.Value.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
                             foo.Map(t => t.LastModified0x10).Convert(t =>
-                                    $"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+                                    $"{t.Value.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
 
                             _fileListWriter.WriteHeader<FileListEntry>();
                             _fileListWriter.NextRecord();
@@ -1402,35 +1405,35 @@ namespace MFTECmd
                             foo.Map(t => t.Timestomped).Index(14).Name("SI<FN");
                             foo.Map(t => t.uSecZeros).Index(15);
                             foo.Map(t => t.Copied).Index(16);
-                            foo.Map(t => t.SiFlags).Convert(t => t.SiFlags.ToString().Replace(", ", "|"))
+                            foo.Map(t => t.SiFlags).Convert(t => t.Value.SiFlags.ToString().Replace(", ", "|"))
                                 .Index(17);
                             foo.Map(t => t.NameType).Index(18);
 
                             foo.Map(t => t.Created0x10).Convert(t =>
-                                $"{t.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
+                                $"{t.Value.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
                             foo.Map(t => t.Created0x30).Convert(t =>
-                                $"{t.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(20);
+                                $"{t.Value.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(20);
 
                             foo.Map(t => t.LastModified0x10).Convert(t =>
-                                    $"{t.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                    $"{t.Value.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
                                 .Index(21);
                             foo.Map(t => t.LastModified0x30).Convert(t =>
-                                    $"{t.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                    $"{t.Value.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
                                 .Index(22);
 
                             foo.Map(t => t.LastRecordChange0x10).Convert(t =>
-                                    $"{t.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                    $"{t.Value.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
                                 .Index(23);
                             foo.Map(t => t.LastRecordChange0x30).Convert(t =>
-                                    $"{t.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                    $"{t.Value.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
                                 .Index(24);
 
                             foo.Map(t => t.LastAccess0x10).Convert(t =>
-                                    $"{t.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                    $"{t.Value.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
                                 .Index(25);
 
                             foo.Map(t => t.LastAccess0x30).Convert(t =>
-                                    $"{t.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                    $"{t.Value.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
                                 .Index(26);
 
                             foo.Map(t => t.UpdateSequenceNumber).Index(27);
