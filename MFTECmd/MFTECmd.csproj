@@ -14,7 +14,7 @@
       <PackageLicenseExpression>MIT</PackageLicenseExpression>
    </PropertyGroup>
    <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net461|AnyCPU'">
-     <DebugType>pdbonly</DebugType>
+     <DebugType>embedded</DebugType>
      <DebugSymbols>true</DebugSymbols>
      <PlatformTarget>AnyCPU</PlatformTarget>
    </PropertyGroup>
@@ -25,7 +25,7 @@
    </PropertyGroup>
    <ItemGroup>
       <PackageReference Include="AlphaFS" Version="2.2.6" />
-      <PackageReference Include="Costura.Fody" Version="5.0.2">
+      <PackageReference Include="Costura.Fody" Version="5.1.0">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
