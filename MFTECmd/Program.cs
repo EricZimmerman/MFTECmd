@@ -60,7 +60,10 @@ namespace MFTECmd
 
             _fluentCommandLineParser.Setup(arg => arg.File)
                 .As('f')
-                .WithDescription("File to process ($MFT | $J | $LogFile | $Boot | $SDS). Required\r\n");
+                .WithDescription("File to process ($MFT | $J | $LogFile | $Boot | $SDS). Required");
+            _fluentCommandLineParser.Setup(arg => arg.MftFile)
+                .As('m')
+                .WithDescription("$MFT file to use when -f points to a $J file (Use this to resolve parent path in $J CSV output).\r\n");
 
             _fluentCommandLineParser.Setup(arg => arg.JsonDirectory)
                 .As("json")
@@ -344,7 +347,7 @@ namespace MFTECmd
                         return;
                     }
 
-                    ProcessMft();
+                    ProcessMft(_fluentCommandLineParser.Object.File);
                     break;
                 case FileType.LogFile:
                     _logger.Warn("$LogFile not supported yet. Exiting");
@@ -359,6 +362,27 @@ namespace MFTECmd
                         return;
                     }
 
+                    if (_fluentCommandLineParser.Object.MftFile.IsNullOrEmpty() == false)
+                    {
+                        //mft was supplied, does it exist?
+                        if (File.Exists(_fluentCommandLineParser.Object.MftFile) == false)
+                        {
+                            _logger.Error($"MFT file '{_fluentCommandLineParser.Object.MftFile}' does not exist! Verify path and try again. Exiting\r\n");
+                            return;
+                        }
+
+                        var ftm = GetFileType(_fluentCommandLineParser.Object.MftFile);
+
+                        if (ftm != FileType.Mft)
+                        {
+                            _logger.Error($"File '{_fluentCommandLineParser.Object.MftFile}' is not an MFT file!! Verify path and try again. Exiting\r\n");
+                            return;
+                        }
+
+                        ProcessMft(_fluentCommandLineParser.Object.MftFile);
+
+                    }
+                    
                     ProcessJ();
                     break;
                 case FileType.Boot:
@@ -722,7 +746,6 @@ namespace MFTECmd
                         }
                     }
 
-
                     outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
 
                     _logger.Warn($"\tCSV output will be saved to '{outFile}'");
@@ -743,6 +766,13 @@ namespace MFTECmd
 
                     foreach (var jUsnEntry in jFile.Value.UsnEntries)
                     {
+                        var parentPath = string.Empty;
+
+                        if (_mft != null)
+                        {
+                            parentPath = _mft.GetFullParentPath($"{jUsnEntry.ParentFileReference.EntryNumber:X8}-{jUsnEntry.ParentFileReference.SequenceNumber:X8}");
+                        }
+
                         var jOut = new JEntryOut
                         {
                             Name = jUsnEntry.Name,
@@ -752,6 +782,8 @@ namespace MFTECmd
 
                             ParentEntryNumber = jUsnEntry.ParentFileReference.EntryNumber,
                             ParentSequenceNumber = jUsnEntry.ParentFileReference.SequenceNumber,
+
+                            ParentPath = parentPath,
 
                             UpdateSequenceNumber = jUsnEntry.UpdateSequenceNumber,
                             UpdateReasons = jUsnEntry.UpdateReasons.ToString().Replace(", ", "|"),
@@ -1099,7 +1131,7 @@ namespace MFTECmd
             }
         }
 
-        private static void ProcessMft()
+        private static void ProcessMft(string file)
         {
             var mftFiles = new Dictionary<string, Mft>();
 
@@ -1110,14 +1142,14 @@ namespace MFTECmd
             sw.Start();
             try
             {
-                _mft = MftFile.Load(_fluentCommandLineParser.Object.File);
-                mftFiles.Add(_fluentCommandLineParser.Object.File, _mft);
+                _mft = MftFile.Load(file);
+                mftFiles.Add(file, _mft);
 
                 var ll = new List<string>();
 
                 if (_fluentCommandLineParser.Object.Vss)
                 {
-                    var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
+                    var dl = Path.GetPathRoot(Path.GetFullPath(file));
 
                     var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -1138,13 +1170,13 @@ namespace MFTECmd
             }
             catch (UnauthorizedAccessException)
             {
-                _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+                _logger.Warn($"'{file}' is in use. Rerouting...\r\n");
 
-                var ll = new List<string> {_fluentCommandLineParser.Object.File};
+                var ll = new List<string> {file};
 
                 if (_fluentCommandLineParser.Object.Vss)
                 {
-                    var dl = Path.GetPathRoot(_fluentCommandLineParser.Object.File);
+                    var dl = Path.GetPathRoot(file);
 
                     var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -1189,7 +1221,7 @@ namespace MFTECmd
             }
 
             _logger.Info(
-                $"Processed '{_fluentCommandLineParser.Object.File}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
+                $"Processed '{file}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
 
             var dt = DateTimeOffset.UtcNow;
 
@@ -2274,6 +2306,7 @@ namespace MFTECmd
     internal class ApplicationArguments
     {
         public string File { get; set; }
+        public string MftFile { get; set; }
         public string CsvDirectory { get; set; }
         public string JsonDirectory { get; set; }
         public string DateTimeFormat { get; set; }

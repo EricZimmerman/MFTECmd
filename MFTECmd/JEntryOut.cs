@@ -11,6 +11,7 @@ namespace MFTECmd
         public int SequenceNumber { get; set; }
         public ulong ParentEntryNumber { get; set; }
         public int ParentSequenceNumber { get; set; }
+        public string ParentPath { get; set; }
 
         public ulong UpdateSequenceNumber { get; set; }
 

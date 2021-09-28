@@ -2,7 +2,7 @@
   "profiles": {
     "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": "-f C:\\Temp\\$MFT --de 0x5b37"
+      "commandLineArgs": "-f C:\\temp\\tout\\c\\$Extend\\$J -m C:\\temp\\tout\\c\\$MFT --csv c:\\temp"
     }
   }
 }

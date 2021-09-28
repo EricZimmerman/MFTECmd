@@ -12,6 +12,7 @@
       <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
       <Copyright>Eric R. Zimmerman</Copyright>
       <PackageLicenseExpression>MIT</PackageLicenseExpression>
+      <StartupObject>MFTECmd.Program</StartupObject>
    </PropertyGroup>
    <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net461|AnyCPU'">
      <DebugType>embedded</DebugType>
