@@ -1298,8 +1298,14 @@ namespace MFTECmd
 
                         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
                         {
-                            Delimiter = "|",
+                            Delimiter = "|"
+                            
                         };
+
+                        if (_fluentCommandLineParser.Object.UseCR)
+                        {
+                            config.NewLine = "\n";
+                        }
 
                         _bodyWriter = new CsvWriter(swBody,config);
 
