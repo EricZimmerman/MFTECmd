@@ -42,6 +42,7 @@ namespace MFTECmd
         private static CsvWriter _csvWriter;
         private static CsvWriter _fileListWriter;
         private static List<MFTRecordOut> _mftOutRecords;
+        private static List<JEntryOut> _jOutRecords;
 
         private static readonly string BaseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
@@ -353,12 +354,12 @@ namespace MFTECmd
                     _logger.Warn("$LogFile not supported yet. Exiting");
                     return;
                 case FileType.UsnJournal:
-                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty()
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() && _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty()
                     )
                     {
                         _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
 
-                        _logger.Warn("--csv is required. Exiting");
+                        _logger.Warn("--csv or --json is required. Exiting");
                         return;
                     }
 
@@ -695,109 +696,237 @@ namespace MFTECmd
                     $"\r\nProcessed '{_fluentCommandLineParser.Object.File}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds");
                 Console.WriteLine();
 
+                if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+                {
+                    _jOutRecords = new List<JEntryOut>();
+                }
+
                 foreach (var jFile in jFiles)
                 {
                     _logger.Info($"Usn entries found in '{jFile.Key}': {jFile.Value.UsnEntries.Count:N0}");
 
-                    StreamWriter swCsv = null;
+               
 
-                    if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+
+                    if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
                     {
-                        _logger.Warn(
-                            $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                        StreamWriter swCsv = null;
 
-                        try
+                        if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
                         {
-                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                            _logger.Warn(
+                                $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+
+                            try
+                            {
+                                Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                            }
+                            catch (Exception)
+                            {
+                                _logger.Fatal(
+                                    $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                                return;
+                            }
                         }
-                        catch (Exception)
+
+                        var outName = string.Empty;
+                        var outFile = string.Empty;
+
+                        if (jFile.Key.StartsWith("\\\\.\\"))
                         {
-                            _logger.Fatal(
-                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
-                            return;
-                        }
-                    }
+                            var vssNumber = Helper.GetVssNumberFromPath(jFile.Key);
+                            var vssTime = Helper.GetVssCreationDate(vssNumber);
 
-                    var outName = string.Empty;
-                    var outFile = string.Empty;
-
-                    if (jFile.Key.StartsWith("\\\\.\\"))
-                    {
-                        var vssNumber = Helper.GetVssNumberFromPath(jFile.Key);
-                        var vssTime = Helper.GetVssCreationDate(vssNumber);
-
-                        outName =
-                            $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$J_Output.csv";
-
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
-                        {
                             outName =
-                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.CsvName)}";
+                                $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$J_Output.csv";
+
+                            if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                            {
+                                outName =
+                                    $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.CsvName)}";
+                            }
                         }
+                        else
+                        {
+                            //normal file
+                            outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
+
+                            if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                            {
+                                outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                            }
+                        }
+
+                        outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+
+                        _logger.Warn($"\tCSV output will be saved to '{outFile}'");
+
+                        swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+
+                        _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
+
+                        var foo = _csvWriter.Context.AutoMap<JEntryOut>();
+
+                        foo.Map(t => t.UpdateTimestamp).Convert(t =>
+                            $"{t.Value.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+
+                        _csvWriter.Context.RegisterClassMap(foo);
+
+                        _csvWriter.WriteHeader<JEntryOut>();
+                        _csvWriter.NextRecord();
+
+                        foreach (var jUsnEntry in jFile.Value.UsnEntries)
+                        {
+                            var parentPath = string.Empty;
+
+                            if (_mft != null)
+                            {
+                                parentPath = _mft.GetFullParentPath($"{jUsnEntry.ParentFileReference.EntryNumber:X8}-{jUsnEntry.ParentFileReference.SequenceNumber:X8}");
+                            }
+
+                            var jOut = new JEntryOut
+                            {
+                                Name = jUsnEntry.Name,
+                                UpdateTimestamp = jUsnEntry.UpdateTimestamp,
+                                EntryNumber = jUsnEntry.FileReference.EntryNumber,
+                                SequenceNumber = jUsnEntry.FileReference.SequenceNumber,
+
+                                ParentEntryNumber = jUsnEntry.ParentFileReference.EntryNumber,
+                                ParentSequenceNumber = jUsnEntry.ParentFileReference.SequenceNumber,
+
+                                ParentPath = parentPath,
+
+                                UpdateSequenceNumber = jUsnEntry.UpdateSequenceNumber,
+                                UpdateReasons = jUsnEntry.UpdateReasons.ToString().Replace(", ", "|"),
+                                FileAttributes = jUsnEntry.FileAttributes.ToString().Replace(", ", "|"),
+                                OffsetToData = jUsnEntry.OffsetToData,
+                                SourceFile = jFile.Key
+                            };
+
+                            _csvWriter.WriteRecord(jOut);
+                            _csvWriter.NextRecord();
+                        }
+
+                        swCsv.Flush();
+                        swCsv.Close();
                     }
                     else
                     {
-                        //normal file
-                        outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        foreach (var jUsnEntry in jFile.Value.UsnEntries)
                         {
-                            outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
-                        }
-                    }
+                            var parentPath = string.Empty;
 
-                    outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                            if (_mft != null)
+                            {
+                                parentPath = _mft.GetFullParentPath($"{jUsnEntry.ParentFileReference.EntryNumber:X8}-{jUsnEntry.ParentFileReference.SequenceNumber:X8}");
+                            }
 
-                    _logger.Warn($"\tCSV output will be saved to '{outFile}'");
+                            var jOut = new JEntryOut
+                            {
+                                Name = jUsnEntry.Name,
+                                UpdateTimestamp = jUsnEntry.UpdateTimestamp,
+                                EntryNumber = jUsnEntry.FileReference.EntryNumber,
+                                SequenceNumber = jUsnEntry.FileReference.SequenceNumber,
 
-                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+                                ParentEntryNumber = jUsnEntry.ParentFileReference.EntryNumber,
+                                ParentSequenceNumber = jUsnEntry.ParentFileReference.SequenceNumber,
 
-                    _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
+                                ParentPath = parentPath,
 
-                    var foo = _csvWriter.Context.AutoMap<JEntryOut>();
+                                UpdateSequenceNumber = jUsnEntry.UpdateSequenceNumber,
+                                UpdateReasons = jUsnEntry.UpdateReasons.ToString().Replace(", ", "|"),
+                                FileAttributes = jUsnEntry.FileAttributes.ToString().Replace(", ", "|"),
+                                OffsetToData = jUsnEntry.OffsetToData,
+                                SourceFile = jFile.Key
+                            };
 
-                    foo.Map(t => t.UpdateTimestamp).Convert(t =>
-                        $"{t.Value.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
-
-                    _csvWriter.Context.RegisterClassMap(foo);
-
-                    _csvWriter.WriteHeader<JEntryOut>();
-                    _csvWriter.NextRecord();
-
-                    foreach (var jUsnEntry in jFile.Value.UsnEntries)
-                    {
-                        var parentPath = string.Empty;
-
-                        if (_mft != null)
-                        {
-                            parentPath = _mft.GetFullParentPath($"{jUsnEntry.ParentFileReference.EntryNumber:X8}-{jUsnEntry.ParentFileReference.SequenceNumber:X8}");
+                            _jOutRecords?.Add(jOut);
+                        
                         }
 
-                        var jOut = new JEntryOut
+                        if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
                         {
-                            Name = jUsnEntry.Name,
-                            UpdateTimestamp = jUsnEntry.UpdateTimestamp,
-                            EntryNumber = jUsnEntry.FileReference.EntryNumber,
-                            SequenceNumber = jUsnEntry.FileReference.SequenceNumber,
+                            var outName = string.Empty;
+                            var outFile = string.Empty;
 
-                            ParentEntryNumber = jUsnEntry.ParentFileReference.EntryNumber,
-                            ParentSequenceNumber = jUsnEntry.ParentFileReference.SequenceNumber,
+                            if (Directory.Exists(_fluentCommandLineParser.Object.JsonDirectory) == false)
+                            {
+                                _logger.Warn(
+                                    $"Path to '{_fluentCommandLineParser.Object.JsonDirectory}' doesn't exist. Creating...");
 
-                            ParentPath = parentPath,
+                                try
+                                {
+                                    Directory.CreateDirectory(_fluentCommandLineParser.Object.JsonDirectory);
+                                }
+                                catch (Exception)
+                                {
+                                    _logger.Fatal(
+                                        $"Unable to create directory '{_fluentCommandLineParser.Object.JsonDirectory}'. Does a file with the same name exist? Exiting");
+                                    return;
+                                }
+                            }
 
-                            UpdateSequenceNumber = jUsnEntry.UpdateSequenceNumber,
-                            UpdateReasons = jUsnEntry.UpdateReasons.ToString().Replace(", ", "|"),
-                            FileAttributes = jUsnEntry.FileAttributes.ToString().Replace(", ", "|"),
-                            OffsetToData = jUsnEntry.OffsetToData,
-                            SourceFile = jFile.Key
-                        };
+                            if (jFile.Key.StartsWith("\\\\.\\"))
+                            {
+                                var vssNumber = Helper.GetVssNumberFromPath(jFile.Key);
+                                var vssTime = Helper.GetVssCreationDate(vssNumber);
 
-                        _csvWriter.WriteRecord(jOut);
-                        _csvWriter.NextRecord();
+                                outName =
+                                    $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$J_Output.json";
+
+                                if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
+                                {
+                                    outName =
+                                        $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.JsonName)}";
+                                }
+                            }
+                            else
+                            {
+                                //normal file
+                                outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$J_Output.json";
+
+                                if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
+                                {
+                                    outName = Path.GetFileName(_fluentCommandLineParser.Object.JsonName);
+                                }
+                            }
+
+                            outFile = Path.Combine(_fluentCommandLineParser.Object.JsonDirectory, outName);
+
+                            _logger.Warn($"\tJSON output will be saved to '{outFile}'");
+
+                            try
+                            {
+                                JsConfig.DateHandler = DateHandler.ISO8601;
+
+                                using (var sWrite =
+                                    new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write)))
+                                {
+                                    if (_jOutRecords != null)
+                                    {
+                                        foreach (var jOutRecord in _jOutRecords)
+                                        {
+                                            sWrite.WriteLine(jOutRecord.ToJson());
+                                        }
+                                    }
+
+                                    sWrite.Flush();
+                                    sWrite.Close();
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                _logger.Error(
+                                    $"\r\nError exporting to JSON. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
+                            }
+
+                        }
+
                     }
 
-                    swCsv.Flush();
-                    swCsv.Close();
+
+
 
                     Console.WriteLine();
                 }
@@ -1335,6 +1464,7 @@ namespace MFTECmd
                 if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
                 {
                     _mftOutRecords = new List<MFTRecordOut>();
+                   
                 }
 
                 if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false ||
@@ -1582,7 +1712,7 @@ namespace MFTECmd
                         using (var sWrite =
                             new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write)))
                         {
-                            if (_mftOutRecords != null)
+                            if (_jOutRecords != null)
                             {
                                 foreach (var mftOutRecord in _mftOutRecords)
                                 {
