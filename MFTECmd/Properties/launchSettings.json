@@ -2,7 +2,7 @@
   "profiles": {
     "MFTECmd": {
       "commandName": "Project",
-      "commandLineArgs": "-f C:\\temp\\tout\\C\\$Extend\\$J --json c:\\temp"
+      "commandLineArgs": "-f D:\\Code\\MFT\\MFT.Test\\TestFiles\\xw\\$MFT --json c:\\temp"
     }
   }
 }

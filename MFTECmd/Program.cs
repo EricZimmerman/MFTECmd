@@ -1712,7 +1712,7 @@ namespace MFTECmd
                         using (var sWrite =
                             new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write)))
                         {
-                            if (_jOutRecords != null)
+                            if (_mftOutRecords != null)
                             {
                                 foreach (var mftOutRecord in _mftOutRecords)
                                 {

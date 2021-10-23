@@ -28,7 +28,7 @@
    <ItemGroup>
       <PackageReference Include="AlphaFS" Version="2.2.6" />
       <PackageReference Include="Boot" Version="1.0.0.1" />
-      <PackageReference Include="Costura.Fody" Version="5.6.0">
+      <PackageReference Include="Costura.Fody" Version="5.7.0">
         <PrivateAssets>all</PrivateAssets>
         
       </PackageReference>
