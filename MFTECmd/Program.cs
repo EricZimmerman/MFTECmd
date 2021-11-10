@@ -1245,6 +1245,7 @@ namespace MFTECmd
                 _logger.Warn($"------------ Ace record #{i} ------------");
                 _logger.Info($"Type: {aceRecord.AceType}");
                 _logger.Info($"Flags: {aceRecord.AceFlags.ToString().Replace(", ", " | ")}");
+                _logger.Info($"Mask: {aceRecord.Mask.ToString().Replace(", ", " | ")}");
 
                 if (aceRecord.SidType == Helpers.SidTypeEnum.UnknownOrUserSid)
                 {

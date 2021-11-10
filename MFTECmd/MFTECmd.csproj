@@ -33,12 +33,12 @@
         
       </PackageReference>
       <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
-      <PackageReference Include="MFT" Version="1.0.0.2" />
+      <PackageReference Include="MFT" Version="1.0.0.3" />
       <PackageReference Include="NLog" Version="4.7.11" />
       <PackageReference Include="CsvHelper" Version="27.1.1" />
       <PackageReference Include="Exceptionless" Version="4.6.2" />
       <PackageReference Include="RawCopy_ERZ" Version="1.0.0" />
-      <PackageReference Include="Secure" Version="1.0.0.1" />
+      <PackageReference Include="Secure" Version="1.0.0.3" />
       <PackageReference Include="ServiceStack.Text" Version="5.12.0" />
       <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
       <PackageReference Include="System.ValueTuple" Version="4.5.0" />
