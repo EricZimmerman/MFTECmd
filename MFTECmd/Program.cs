@@ -509,7 +509,7 @@ public class Program
 
                     try
                     {
-                        Directory.CreateDirectory(csv);
+                        Directory.CreateDirectory(csv!);
                     }
                     catch (Exception)
                     {
@@ -2274,7 +2274,7 @@ public class Program
             {
                 if (adsinfo.ResidentData != null)
                 {
-                    mftr.ZoneIdContents = CodePagesEncodingProvider.Instance.GetEncoding(1252).GetString(adsinfo.ResidentData.Data);
+                    mftr.ZoneIdContents = CodePagesEncodingProvider.Instance.GetEncoding(1252)!.GetString(adsinfo.ResidentData.Data);
                 }
                 else
                 {
