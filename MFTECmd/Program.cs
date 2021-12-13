@@ -27,9 +27,13 @@ using ServiceStack;
 using ServiceStack.Text;
 using Usn;
 using CsvWriter = CsvHelper.CsvWriter;
+
+#if !NET6_0
 using Directory = Alphaleonis.Win32.Filesystem.Directory;
 using File = Alphaleonis.Win32.Filesystem.File;
 using Path = Alphaleonis.Win32.Filesystem.Path;
+#endif
+
 
 namespace MFTECmd;
 
@@ -46,12 +50,12 @@ public class Program
 
     private static string Footer = @"Examples: MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out"" --csvf MyOutputFile.csv" +
                                    "\r\n\t " +
-                                   @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
-                                   @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --json ""c:\temp\jsonout""" + "\r\n\t " +
-                                   @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
-                                   @" MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
+                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
+                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --json ""c:\temp\jsonout""" + "\r\n\t " +
+                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
+                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
                                    "\r\n\t" +
-                                   "  Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes\r\n";
+                                   "    Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes";
 
 
     private static string[] _args;
@@ -115,7 +119,7 @@ public class Program
             new Option<bool>(
                 "--blf",
                 getDefaultValue:()=>false,
-                "When true, use LF vs CRLF for newlines. Default is FALSE\r\n"),
+                "When true, use LF vs CRLF for newlines\r\n"),
 
             new Option<string>(
                 "--dd",
@@ -123,11 +127,11 @@ public class Program
 
             new Option<string>(
                 "--do",
-                "Offset of the FILE record to dump as decimal or hex. Ex: 5120 or 0x1400 Use --de or --vl 1 to see offsets\r\n"),
+                "Offset of the FILE record to dump as decimal or hex. Ex: 5120 or 0x1400 Use --de or --debug to see offsets\r\n"),
 
             new Option<string>(
                 "--de",
-                getDefaultValue:()=>"",
+                
                 "Dump full details for entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 5, 624-5 or 0x270-0x5."),
 
             new Option<bool>(
@@ -137,7 +141,6 @@ public class Program
             
             new Option<string>(
                 "--ds",
-                
                 "Dump full details for Security Id as decimal or hex. Example: 624 or 0x270\r\n"),
             
             new Option<string>(
@@ -148,27 +151,27 @@ public class Program
             new Option<bool>(
                 "--sn",
                 getDefaultValue:()=>false,
-                "Include DOS file name types. Default is FALSE"),
+                "Include DOS file name types"),
             
             new Option<bool>(
                 "--fl",
                 getDefaultValue:()=>false,
-                "Generate condensed file listing. Requires --csv. Default is FALSE"),
+                "Generate condensed file listing. Requires --csv"),
                         
             new Option<bool>(
                 "--at",
                 getDefaultValue:()=>false,
-                "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10. Default is FALSE\r\n"),
+                "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10\r\n"),
             
             new Option<bool>(
                 "--vss",
                 getDefaultValue:()=>false,
-                "Process all Volume Shadow Copies that exist on drive specified by -f . Default is FALSE"),
+                "Process all Volume Shadow Copies that exist on drive specified by -f"),
             
             new Option<bool>(
                 "--dedupe",
                 getDefaultValue:()=>false,
-                "Deduplicate -f & VSCs based on SHA-1. First file found wins. Default is FALSE\r\n"),
+                "Deduplicate -f & VSCs based on SHA-1. First file found wins\r\n"),
             
             new Option<bool>(
                 "--debug",
@@ -182,7 +185,7 @@ public class Program
                 
         };
             
-            _rootCommand.Description = Header + "\r\n\r\n" +Footer;
+            _rootCommand.Description = Header + "\r\n\r\n" + Footer;
 
             // rootCommand.Handler = System.CommandLine.NamingConventionBinder.CommandHandler.Create<string,string,string,string,string,string,string,string,string,bool,string,string,string,bool,string,string,bool,bool,bool,bool,bool,bool,bool>(DoWork);
             //
@@ -202,8 +205,6 @@ public class Program
 
     private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl , bool at, bool vss, bool dedupe, bool debug, bool trace)
     {
-        
-
         if (f.IsNullOrEmpty())
         {
             var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
@@ -211,7 +212,7 @@ public class Program
 
             helpBld.Write(hc);
                     
-            _logger.Warn($"File '{f}' not found. Exiting\r\n");
+            _logger.Warn($"-f is required. Exiting\r\n");
             return;
         }
 
@@ -268,27 +269,28 @@ public class Program
 
         if (csv.IsNullOrEmpty() == false)
         {
-            if (Directory.ExistsDrive(Path.GetFullPath(csv)) == false)
+            if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(csv))) == false)
             {
-                _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                
+                _logger.Error($"Destination location not available for '{csv}'. Verify drive letter and try again. Exiting\r\n");
                 return;
             }
         }
 
         if (json.IsNullOrEmpty() == false)
         {
-            if (Directory.ExistsDrive(Path.GetFullPath(json)) == false)
+            if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(json))) == false)
             {
-                _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                _logger.Error($"Destination location not available for {json}. Verify drive letter and try again. Exiting\r\n");
                 return;
             }
         }
 
         if (body.IsNullOrEmpty() == false)
         {
-            if (Directory.ExistsDrive(Path.GetFullPath(body)) == false)
+            if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(body))) == false)
             {
-                _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                _logger.Error($"Destination location not available for '{json}'. Verify drive letter and try again. Exiting\r\n");
                 return;
             }
         }
@@ -336,14 +338,12 @@ public class Program
                         _logger.Warn("--dd option missing. Exiting\r\n");
                         return;
                     }
-                    if (Directory.ExistsDrive(Path.GetFullPath(dd)) == false)
+                    if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(dd))) == false)
                     {
-                        _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
+                        _logger.Error($"Destination location not available for '{dd}'. Verify drive letter and try again. Exiting\r\n");
                         return;
                     }
                 }
-
-
 
                 if (dd.IsNullOrEmpty() == false &&
                     @do.IsNullOrEmpty())
@@ -357,7 +357,7 @@ public class Program
                     return;
                 }
 
-                ProcessMft(f,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at);
+                ProcessMft(f,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at,de);
                 break;
             case FileType.LogFile:
                 _logger.Warn("$LogFile not supported yet. Exiting");
@@ -392,7 +392,7 @@ public class Program
                         return;
                     }
 
-                    ProcessMft(m,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at);
+                    ProcessMft(m,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at,de);
 
                 }
 
@@ -1270,7 +1270,7 @@ public class Program
         }
     }
 
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl,string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl,string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1790,13 +1790,13 @@ public class Program
 
         #region DumpEntry
 
-        if (@do.IsNullOrEmpty() == false)
+        if (de.IsNullOrEmpty() == false)
         {
             _logger.Info("");
 
             FileRecord fr = null;
 
-            var segs = @do.Split('-');
+            var segs = de.Split('-');
 
             bool entryOk;
             bool seqOk;
@@ -1808,13 +1808,13 @@ public class Program
             if (segs.Length == 2)
             {
                 _logger.Warn(
-                    $"Could not parse '{@do}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
+                    $"Could not parse '{de}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
                 return;
             }
 
             if (segs.Length == 1)
             {
-                if (@do.StartsWith("0x"))
+                if (de.StartsWith("0x"))
                 {
                     var seg0 = segs[0].Replace("0x", "");
 
@@ -1866,7 +1866,7 @@ public class Program
 
             if (key.Length == 0)
             {
-                if (@do.StartsWith("0x"))
+                if (de.StartsWith("0x"))
                 {
                     var seg0 = segs[0].Replace("0x", "");
                     var seg1 = segs[1].Replace("0x", "");
@@ -1883,7 +1883,7 @@ public class Program
                 if (entryOk == false || seqOk == false)
                 {
                     _logger.Warn(
-                        $"Could not parse '{@do}' to valid values. Exiting");
+                        $"Could not parse '{de}' to valid values. Exiting");
                     return;
                 }
 
@@ -1903,7 +1903,7 @@ public class Program
             if (fr == null)
             {
                 _logger.Warn(
-                    $"Could not find file record with entry/seq '{@do}'. Exiting");
+                    $"Could not find file record with entry/seq '{de}'. Exiting");
                 return;
             }
 
