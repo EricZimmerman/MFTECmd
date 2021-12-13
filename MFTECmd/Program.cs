@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Help;
+using System.CommandLine.NamingConventionBinder;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -27,13 +28,11 @@ using ServiceStack;
 using ServiceStack.Text;
 using Usn;
 using CsvWriter = CsvHelper.CsvWriter;
-
 #if !NET6_0
 using Directory = Alphaleonis.Win32.Filesystem.Directory;
 using File = Alphaleonis.Win32.Filesystem.File;
 using Path = Alphaleonis.Win32.Filesystem.Path;
 #endif
-
 
 namespace MFTECmd;
 
@@ -42,20 +41,20 @@ public class Program
     private static Logger _logger;
 
     private static Mft _mft;
-    
-    private static string Header =
+
+    private static readonly string Header =
         $"MFTECmd version {Assembly.GetExecutingAssembly().GetName().Version}" +
         "\r\n\r\nAuthor: Eric Zimmerman (saericzimmerman@gmail.com)" +
         "\r\nhttps://github.com/EricZimmerman/MFTECmd";
 
-    private static string Footer = @"Examples: MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out"" --csvf MyOutputFile.csv" +
-                                   "\r\n\t " +
-                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
-                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --json ""c:\temp\jsonout""" + "\r\n\t " +
-                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
-                                   @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
-                                   "\r\n\t" +
-                                   "    Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes";
+    private static readonly string Footer = @"Examples: MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out"" --csvf MyOutputFile.csv" +
+                                            "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --csv ""c:\temp\out""" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --json ""c:\temp\jsonout""" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
+                                            "\r\n\t" +
+                                            "    Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes";
 
 
     private static string[] _args;
@@ -77,7 +76,7 @@ public class Program
 
         _logger = LogManager.GetLogger("MFTECmd");
         _args = args;
-    
+
         _rootCommand = new RootCommand
         {
             new Option<string>(
@@ -91,19 +90,19 @@ public class Program
             new Option<string>(
                 "--json",
                 "Directory to save JSON formatted results to. This or --csv required unless --de or --body is specified"),
-                
+
             new Option<string>(
                 "--jsonf",
                 "File name to save JSON formatted results to. When present, overrides default name"),
-           
+
             new Option<string>(
                 "--csv",
                 "Directory to save CSV formatted results to. This or --json required unless --de or --body is specified"),
-                
+
             new Option<string>(
                 "--csvf",
                 "File name to save CSV formatted results to. When present, overrides default name\r\n"),
-                
+
             new Option<string>(
                 "--body",
                 "Directory to save bodyfile formatted results to. --bdl is also required when using this option"),
@@ -118,7 +117,7 @@ public class Program
 
             new Option<bool>(
                 "--blf",
-                getDefaultValue:()=>false,
+                () => false,
                 "When true, use LF vs CRLF for newlines\r\n"),
 
             new Option<string>(
@@ -131,88 +130,75 @@ public class Program
 
             new Option<string>(
                 "--de",
-                
                 "Dump full details for entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 5, 624-5 or 0x270-0x5."),
 
             new Option<bool>(
                 "--fls",
-                getDefaultValue:()=>false,
+                () => false,
                 "When true, displays contents of directory specified by --de. Ignored when --de points to a file"),
-            
+
             new Option<string>(
                 "--ds",
                 "Dump full details for Security Id as decimal or hex. Example: 624 or 0x270\r\n"),
-            
+
             new Option<string>(
                 "--dt",
-                getDefaultValue:()=>"yyyy-MM-dd HH:mm:ss",
+                () => "yyyy-MM-dd HH:mm:ss.fffffff",
                 "The custom date/time format to use when displaying time stamps. See https://goo.gl/CNVq0k for options"),
-                
+
             new Option<bool>(
                 "--sn",
-                getDefaultValue:()=>false,
+                () => false,
                 "Include DOS file name types"),
-            
+
             new Option<bool>(
                 "--fl",
-                getDefaultValue:()=>false,
+                () => false,
                 "Generate condensed file listing. Requires --csv"),
-                        
+
             new Option<bool>(
                 "--at",
-                getDefaultValue:()=>false,
+                () => false,
                 "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10\r\n"),
-            
+
             new Option<bool>(
                 "--vss",
-                getDefaultValue:()=>false,
+                () => false,
                 "Process all Volume Shadow Copies that exist on drive specified by -f"),
-            
+
             new Option<bool>(
                 "--dedupe",
-                getDefaultValue:()=>false,
+                () => false,
                 "Deduplicate -f & VSCs based on SHA-1. First file found wins\r\n"),
-            
+
             new Option<bool>(
                 "--debug",
-                getDefaultValue:()=>false,
+                () => false,
                 "Show debug information during processing"),
-            
+
             new Option<bool>(
                 "--trace",
-                getDefaultValue:()=>false,
-                "Show trace information during processing"),
-                
+                () => false,
+                "Show trace information during processing")
         };
-            
-            _rootCommand.Description = Header + "\r\n\r\n" + Footer;
 
-            // rootCommand.Handler = System.CommandLine.NamingConventionBinder.CommandHandler.Create<string,string,string,string,string,string,string,string,string,bool,string,string,string,bool,string,string,bool,bool,bool,bool,bool,bool,bool>(DoWork);
-            //
-            // rootCommand.Handler =System.CommandLine.Invocation.CommandHandler.Create(
-            //     (string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl , bool at, bool vss, bool dedupe, bool debug, bool trace) =>
-            // {
-            //
-            // });
-            
-            _rootCommand.Handler = System.CommandLine.NamingConventionBinder.CommandHandler.Create(
-                DoWork);
-            
-            await _rootCommand.InvokeAsync(args);
-       
-       
+        _rootCommand.Description = Header + "\r\n\r\n" + Footer;
+
+        _rootCommand.Handler = CommandHandler.Create(DoWork);
+
+        await _rootCommand.InvokeAsync(args);
     }
 
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl , bool at, bool vss, bool dedupe, bool debug, bool trace)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool vss, bool dedupe, bool debug, bool trace)
     {
         if (f.IsNullOrEmpty())
         {
             var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-            var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+            var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
 
             helpBld.Write(hc);
-                    
-            _logger.Warn($"-f is required. Exiting\r\n");
+
+            _logger.Warn("-f is required. Exiting\r\n");
             return;
         }
 
@@ -271,7 +257,6 @@ public class Program
         {
             if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(csv))) == false)
             {
-                
                 _logger.Error($"Destination location not available for '{csv}'. Verify drive letter and try again. Exiting\r\n");
                 return;
             }
@@ -295,7 +280,7 @@ public class Program
             }
         }
 
-        
+
         switch (ft)
         {
             case FileType.Mft:
@@ -306,7 +291,7 @@ public class Program
                     dd.IsNullOrEmpty())
                 {
                     var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+                    var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
 
                     helpBld.Write(hc);
 
@@ -318,7 +303,7 @@ public class Program
                     bdl.IsNullOrEmpty())
                 {
                     var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+                    var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
 
                     helpBld.Write(hc);
 
@@ -331,13 +316,14 @@ public class Program
                     if (dd.IsNullOrEmpty())
                     {
                         var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-                        var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+                        var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
 
                         helpBld.Write(hc);
-                        
+
                         _logger.Warn("--dd option missing. Exiting\r\n");
                         return;
                     }
+
                     if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(dd))) == false)
                     {
                         _logger.Error($"Destination location not available for '{dd}'. Verify drive letter and try again. Exiting\r\n");
@@ -349,7 +335,7 @@ public class Program
                     @do.IsNullOrEmpty())
                 {
                     var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+                    var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
 
                     helpBld.Write(hc);
 
@@ -357,7 +343,7 @@ public class Program
                     return;
                 }
 
-                ProcessMft(f,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at,de);
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de);
                 break;
             case FileType.LogFile:
                 _logger.Warn("$LogFile not supported yet. Exiting");
@@ -367,7 +353,7 @@ public class Program
                    )
                 {
                     var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+                    var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
 
                     helpBld.Write(hc);
 
@@ -392,8 +378,7 @@ public class Program
                         return;
                     }
 
-                    ProcessMft(m,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at,de);
-
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -407,7 +392,7 @@ public class Program
 
                 {
                     var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
-                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+                    var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
 
                     helpBld.Write(hc);
 
@@ -454,16 +439,15 @@ public class Program
                         var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Boot";
                         ll.Add(vsp);
                     }
+
                     var rawFiles = Helper.GetFiles(ll, dedupe);
-                        
-                    foreach (var rawCopyReturn in rawFiles) 
-                    { 
-                        bf = new Boot.Boot(rawCopyReturn.FileStream); 
+
+                    foreach (var rawCopyReturn in rawFiles)
+                    {
+                        bf = new Boot.Boot(rawCopyReturn.FileStream);
                         bootFiles.Add(rawCopyReturn.InputFilename, bf);
                     }
                 }
-
-                  
             }
             catch (Exception)
             {
@@ -471,7 +455,7 @@ public class Program
                 {
                     _logger.Warn($"'{f}' is in use. Rerouting...\r\n");
 
-                    var ll = new List<string> {f};
+                    var ll = new List<string> { f };
 
                     if (vss)
                     {
@@ -514,7 +498,7 @@ public class Program
                 $"\r\nProcessed '{f}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
 
             StreamWriter swCsv = null;
-        
+
 
             if (csv.IsNullOrEmpty() == false)
             {
@@ -548,7 +532,7 @@ public class Program
 
                 swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
-                _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
+                _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
                 var foo = _csvWriter.Context.AutoMap<BootOut>();
 
@@ -606,8 +590,6 @@ public class Program
 
             swCsv?.Flush();
             swCsv?.Close();
-
-                
         }
         catch (Exception e)
         {
@@ -615,7 +597,7 @@ public class Program
         }
     }
 
-    private static void ProcessJ(string f, bool vss, bool dedupe, string csv, string csvf,string json, string jsonf, string dt)
+    private static void ProcessJ(string f, bool vss, bool dedupe, string csv, string csvf, string json, string jsonf, string dt)
     {
         var sw = new Stopwatch();
         sw.Start();
@@ -656,8 +638,6 @@ public class Program
                         jFiles.Add(rawCopyReturn.InputFilename, j);
                     }
                 }
-
-                 
             }
             catch (Exception)
             {
@@ -665,7 +645,7 @@ public class Program
                 {
                     _logger.Warn($"'{f}' is in use. Rerouting...\r\n");
 
-                    var ll = new List<string> {f};
+                    var ll = new List<string> { f };
 
                     if (vss)
                     {
@@ -775,7 +755,7 @@ public class Program
 
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
-                    _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
+                    _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
                     var foo = _csvWriter.Context.AutoMap<JEntryOut>();
 
@@ -824,7 +804,6 @@ public class Program
                 }
                 else
                 {
-
                     foreach (var jUsnEntry in jFile.Value.UsnEntries)
                     {
                         var parentPath = string.Empty;
@@ -854,7 +833,6 @@ public class Program
                         };
 
                         _jOutRecords?.Add(jOut);
-                        
                     }
 
                     if (json.IsNullOrEmpty() == false)
@@ -932,9 +910,7 @@ public class Program
                             _logger.Error(
                                 $"\r\nError exporting to JSON. Please report to saericzimmerman@gmail.com.\r\n\r\nError: {e.Message}");
                         }
-
                     }
-
                 }
 
                 Console.WriteLine();
@@ -975,6 +951,7 @@ public class Program
                         var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Secure:$SDS";
                         ll.Add(vsp);
                     }
+
                     var rawFiles = Helper.GetFiles(ll, dedupe);
 
                     foreach (var rawCopyReturn in rawFiles)
@@ -983,8 +960,6 @@ public class Program
                         sdsFiles.Add(rawCopyReturn.InputFilename, sds);
                     }
                 }
-
-                   
             }
             catch (Exception)
             {
@@ -992,7 +967,7 @@ public class Program
                 {
                     _logger.Warn($"'{f}' is in use. Rerouting...\r\n");
 
-                    var ll = new List<string> {f};
+                    var ll = new List<string> { f };
 
                     if (vss)
                     {
@@ -1096,7 +1071,7 @@ public class Program
 
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
-                    _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
+                    _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
                     var foo = _csvWriter.Context.AutoMap<SdsOut>();
 
@@ -1121,7 +1096,7 @@ public class Program
                             SourceFile = sdsFile.Key
                         };
 
-                        if (sdsEntry.SecurityDescriptor.Sacl != null && sdsEntry.SecurityDescriptor.Sacl.RawBytes.Length> 0)
+                        if (sdsEntry.SecurityDescriptor.Sacl != null && sdsEntry.SecurityDescriptor.Sacl.RawBytes.Length > 0)
                         {
                             sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
                             var uniqueAce = new HashSet<string>();
@@ -1270,7 +1245,7 @@ public class Program
         }
     }
 
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl,string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1311,7 +1286,7 @@ public class Program
         {
             _logger.Warn($"'{file}' is in use. Rerouting...\r\n");
 
-            var ll = new List<string> {file};
+            var ll = new List<string> { file };
 
             if (vss)
             {
@@ -1372,7 +1347,7 @@ public class Program
             StreamWriter swBody = null;
             StreamWriter swCsv = null;
             StreamWriter swFileList = null;
-                
+
 
             if (body.IsNullOrEmpty() == false)
             {
@@ -1438,7 +1413,6 @@ public class Program
                     var config = new CsvConfiguration(CultureInfo.InvariantCulture)
                     {
                         Delimiter = "|"
-                            
                     };
 
                     if (blf)
@@ -1446,7 +1420,7 @@ public class Program
                         config.NewLine = "\n";
                     }
 
-                    _bodyWriter = new CsvWriter(swBody,config);
+                    _bodyWriter = new CsvWriter(swBody, config);
 
                     var foo = _bodyWriter.Context.AutoMap<BodyFile>();
                     foo.Map(t => t.Md5).Index(0);
@@ -1474,7 +1448,6 @@ public class Program
             if (json.IsNullOrEmpty() == false)
             {
                 _mftOutRecords = new List<MFTRecordOut>();
-                   
             }
 
             if (csv.IsNullOrEmpty() == false ||
@@ -1536,13 +1509,13 @@ public class Program
 
                         if (csvf.IsNullOrEmpty() == false)
                         {
-                            outFileFl = Path.Combine(Path.GetDirectoryName(outFileFl),$"{Path.GetFileNameWithoutExtension(outFileFl)}_FileListing{Path.GetExtension(outFileFl)}");
+                            outFileFl = Path.Combine(Path.GetDirectoryName(outFileFl), $"{Path.GetFileNameWithoutExtension(outFileFl)}_FileListing{Path.GetExtension(outFileFl)}");
                         }
 
                         _logger.Warn($"\tCSV file listing output will be saved to '{outFileFl}'");
 
                         swFileList = new StreamWriter(outFileFl, false, Encoding.UTF8);
-                        _fileListWriter = new CsvWriter(swFileList,CultureInfo.InvariantCulture);
+                        _fileListWriter = new CsvWriter(swFileList, CultureInfo.InvariantCulture);
 
                         var foo = _fileListWriter.Context.AutoMap<FileListEntry>();
 
@@ -1556,12 +1529,12 @@ public class Program
                         _fileListWriter.NextRecord();
                     }
 
-                      
+
                     try
                     {
                         swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
 
-                        _csvWriter = new CsvWriter(swCsv,CultureInfo.InvariantCulture);
+                        _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
                         var foo = _csvWriter.Context.AutoMap<MFTRecordOut>();
 
@@ -1643,8 +1616,8 @@ public class Program
             {
                 try
                 {
-                    ProcessRecords(mftFile.Value.FileRecords,includeShort,alltimestamp,bdl);
-                    ProcessRecords(mftFile.Value.FreeFileRecords,includeShort,alltimestamp,bdl);
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl);
                 }
                 catch (Exception ex)
                 {
@@ -1655,7 +1628,7 @@ public class Program
 
             swCsv?.Flush();
             swCsv?.Close();
-                
+
             swFileList?.Flush();
             swFileList?.Close();
 
@@ -1968,7 +1941,7 @@ public class Program
             }
             catch (Exception)
             {
-                var ll = new List<string> {file};
+                var ll = new List<string> { file };
 
                 try
                 {
@@ -2076,16 +2049,16 @@ public class Program
             }
 
             foreach (var attribute in fr.Value.Attributes.Where(t =>
-                         t.AttributeType == AttributeType.FileName).OrderBy(t => ((FileName) t).FileInfo.NameType))
+                         t.AttributeType == AttributeType.FileName).OrderBy(t => ((FileName)t).FileInfo.NameType))
             {
-                var fn = (FileName) attribute;
+                var fn = (FileName)attribute;
                 if (includeShort == false &&
                     fn.FileInfo.NameType == NameTypes.Dos)
                 {
                     continue;
                 }
 
-                var mftr = GetCsvData(fr.Value, fn, null,alltimestamp);
+                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp);
 
                 var ads = fr.Value.GetAlternateDataStreams();
 
@@ -2096,7 +2069,7 @@ public class Program
                 _mftOutRecords?.Add(mftr);
 
                 _csvWriter?.NextRecord();
-                 
+
 
                 if (_fileListWriter != null)
                 {
@@ -2106,12 +2079,12 @@ public class Program
 
                 if (_bodyWriter != null)
                 {
-                    var f = GetBodyData(mftr, true,bdl);
+                    var f = GetBodyData(mftr, true, bdl);
 
                     _bodyWriter.WriteRecord(f);
                     _bodyWriter.NextRecord();
 
-                    f = GetBodyData(mftr, false,bdl);
+                    f = GetBodyData(mftr, false, bdl);
 
                     _bodyWriter.WriteRecord(f);
                     _bodyWriter.NextRecord();
@@ -2120,7 +2093,7 @@ public class Program
 
                 foreach (var adsInfo in ads)
                 {
-                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo,alltimestamp);
+                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp);
                     adsRecord.IsAds = true;
                     adsRecord.OtherAttributeId = adsInfo.AttributeId;
                     _csvWriter?.WriteRecord(adsRecord);
@@ -2137,7 +2110,7 @@ public class Program
 
                     if (_bodyWriter != null)
                     {
-                        var f1 = GetBodyData(adsRecord, true,bdl);
+                        var f1 = GetBodyData(adsRecord, true, bdl);
 
                         _bodyWriter.WriteRecord(f1);
                         _bodyWriter.NextRecord();
@@ -2314,7 +2287,7 @@ public class Program
 
         mftr.LogfileSequenceNumber = fr.LogSequenceNumber;
 
-        var oid = (ObjectId_) fr.Attributes.SingleOrDefault(t =>
+        var oid = (ObjectId_)fr.Attributes.SingleOrDefault(t =>
             t.AttributeType == AttributeType.VolumeVersionObjectId);
 
         if (oid != null)
@@ -2322,7 +2295,7 @@ public class Program
             mftr.ObjectIdFileDroid = oid.ObjectId.ToString();
         }
 
-        var lus = (LoggedUtilityStream) fr.Attributes.FirstOrDefault(t =>
+        var lus = (LoggedUtilityStream)fr.Attributes.FirstOrDefault(t =>
             t.AttributeType == AttributeType.LoggedUtilityStream);
 
         if (lus != null)
@@ -2336,7 +2309,7 @@ public class Program
             mftr.ReparseTarget = rp.SubstituteName.Replace(@"\??\", "");
         }
 
-        var si = (StandardInfo) fr.Attributes.SingleOrDefault(t =>
+        var si = (StandardInfo)fr.Attributes.SingleOrDefault(t =>
             t.AttributeType == AttributeType.StandardInformation);
 
         if (si != null)
@@ -2405,7 +2378,7 @@ public class Program
         {
             return true;
         }
-            
+
         var identity = WindowsIdentity.GetCurrent();
         var principal = new WindowsPrincipal(identity);
         return principal.IsInRole(WindowsBuiltInRole.Administrator);
