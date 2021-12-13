@@ -2,13 +2,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
    <PropertyGroup>
       <OutputType>Exe</OutputType>
-      <TargetFrameworks>net461</TargetFrameworks>
+      <TargetFrameworks>net461;net6.0</TargetFrameworks>
       <Authors>Eric R. Zimmerman</Authors>
       <Description>MFTECmd</Description>
-      <AssemblyVersion>0.5.0.1</AssemblyVersion>
-      <FileVersion>0.5.0.1</FileVersion>
+      <AssemblyVersion>0.5.1.0</AssemblyVersion>
+      <FileVersion>0.5.1.0</FileVersion>
       <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-      <Version>0.5.0.1</Version>
+      <Version>0.5.1.0</Version>
+      <LangVersion>10</LangVersion>
       <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
       <Copyright>Eric R. Zimmerman</Copyright>
       <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -26,25 +27,28 @@
      <Optimize>false</Optimize>
    </PropertyGroup>
    <ItemGroup>
-      <PackageReference Include="AlphaFS" Version="2.2.6" />
-      <PackageReference Include="Boot" Version="1.0.0.1" />
+      <PackageReference Include="AlphaFS.New" Version="2.3.0" />
+      <PackageReference Include="Boot" Version="1.1.0" />
       <PackageReference Include="Costura.Fody" Version="5.7.0">
         <PrivateAssets>all</PrivateAssets>
         
       </PackageReference>
-      <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
-      <PackageReference Include="MFT" Version="1.0.0.3" />
-      <PackageReference Include="NLog" Version="4.7.11" />
-      <PackageReference Include="CsvHelper" Version="27.1.1" />
+      <PackageReference Include="MFT" Version="1.1.0" />
+      <PackageReference Include="NLog" Version="4.7.13" />
+      <PackageReference Include="CsvHelper" Version="27.2.1" />
       <PackageReference Include="Exceptionless" Version="4.6.2" />
-      <PackageReference Include="RawCopy_ERZ" Version="1.0.0" />
-      <PackageReference Include="Secure" Version="1.0.0.3" />
-      <PackageReference Include="ServiceStack.Text" Version="5.12.0" />
+      <PackageReference Include="RawCopy_ERZ" Version="1.0.0.1" />
+      <PackageReference Include="Secure" Version="1.1.0" />
+      <PackageReference Include="ServiceStack.Text" Version="5.13.2" />
+      <PackageReference Include="System.CommandLine" Version="2.0.0-beta2.21612.3" />
+      <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta2.21612.3" />
       <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
+      <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0" />
       <PackageReference Include="System.ValueTuple" Version="4.5.0" />
-      <PackageReference Include="Usn" Version="1.0.0.1" />
+      <PackageReference Include="Usn" Version="1.1.0" />
    </ItemGroup>
    <ItemGroup>
+     <Folder Include="Properties" />
      <Folder Include="Properties\" />
    </ItemGroup>
 </Project>
