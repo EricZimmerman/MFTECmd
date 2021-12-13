@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.CommandLine.Help;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -62,6 +63,7 @@ public class Program
     private static List<JEntryOut> _jOutRecords;
 
     private static readonly string BaseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+    private static RootCommand _rootCommand;
 
     private static async Task Main(string[] args)
     {
@@ -72,7 +74,7 @@ public class Program
         _logger = LogManager.GetLogger("MFTECmd");
         _args = args;
     
-        var rootCommand = new RootCommand
+        _rootCommand = new RootCommand
         {
             new Option<string>(
                 "-f",
@@ -135,7 +137,7 @@ public class Program
             
             new Option<string>(
                 "--ds",
-                getDefaultValue:()=>"",
+                
                 "Dump full details for Security Id as decimal or hex. Example: 624 or 0x270\r\n"),
             
             new Option<string>(
@@ -180,24 +182,20 @@ public class Program
                 
         };
             
-            rootCommand.Description = Header + "\r\n\r\n" +Footer;
+            _rootCommand.Description = Header + "\r\n\r\n" +Footer;
 
-            rootCommand.Handler = System.CommandLine.NamingConventionBinder.CommandHandler.Create<string,string,string,string,string,string,string,string,string,bool,string,string,string,bool,string,string,bool,bool,bool,bool,bool,bool,bool>(DoWork);
-
-            rootCommand.Handler =System.CommandLine.Invocation.CommandHandler.Create(
-                (string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl , bool at, bool vss, bool dedupe, bool debug, bool trace) =>
-            {
-
-            });
+            // rootCommand.Handler = System.CommandLine.NamingConventionBinder.CommandHandler.Create<string,string,string,string,string,string,string,string,string,bool,string,string,string,bool,string,string,bool,bool,bool,bool,bool,bool,bool>(DoWork);
+            //
+            // rootCommand.Handler =System.CommandLine.Invocation.CommandHandler.Create(
+            //     (string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl , bool at, bool vss, bool dedupe, bool debug, bool trace) =>
+            // {
+            //
+            // });
             
-            rootCommand.Handler = System.CommandLine.Invocation.CommandHandler.Create(
-                (string aString, int anInt) =>
-                {
-                    Console.WriteLine(aString);
-                    Console.WriteLine(anInt);
-                });
+            _rootCommand.Handler = System.CommandLine.NamingConventionBinder.CommandHandler.Create(
+                DoWork);
             
-            await rootCommand.InvokeAsync(args);
+            await _rootCommand.InvokeAsync(args);
        
        
     }
@@ -206,48 +204,51 @@ public class Program
     {
         
 
-        if (_fluentCommandLineParser.Object.File.IsNullOrEmpty())
+        if (f.IsNullOrEmpty())
         {
-            _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+            var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+            var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
 
-            _logger.Warn("-f is required. Exiting");
+            helpBld.Write(hc);
+                    
+            _logger.Warn($"File '{f}' not found. Exiting\r\n");
             return;
         }
 
-        if (_fluentCommandLineParser.Object.File.IsNullOrEmpty() == false)
+        if (f.IsNullOrEmpty() == false)
         {
-            if (Path.GetDirectoryName(_fluentCommandLineParser.Object.File)?.Length == 3)
+            if (Path.GetDirectoryName(f)?.Length == 3)
             {
                 //OK
             }
-            else if (_fluentCommandLineParser.Object.File.ToUpperInvariant().Contains("$EXTEND\\$USNJRNL"))
+            else if (f.ToUpperInvariant().Contains("$EXTEND\\$USNJRNL"))
             {
                 //OK
             }
-            else if (!File.Exists(_fluentCommandLineParser.Object.File))
+            else if (!File.Exists(f))
             {
                 //the path is off the root of the drive, so it works for things like $Boot, $MFT, etc
-                _logger.Warn($"File '{_fluentCommandLineParser.Object.File}' not found. Exiting");
+                _logger.Warn($"File '{f}' not found. Exiting");
                 return;
             }
         }
 
 
-        _logger.Info(header);
+        _logger.Info(Header);
         _logger.Info("");
-        _logger.Info($"Command line: {string.Join(" ", Environment.GetCommandLineArgs().Skip(1))}\r\n");
+        _logger.Info($"Command line: {string.Join(" ", _args)}\r\n");
 
         if (IsAdministrator() == false)
         {
             _logger.Fatal("Warning: Administrator privileges not found!\r\n");
         }
 
-        if (_fluentCommandLineParser.Object.Debug)
+        if (debug)
         {
             LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Debug);
         }
 
-        if (_fluentCommandLineParser.Object.Trace)
+        if (trace)
         {
             LogManager.Configuration.LoggingRules.First().EnableLoggingForLevel(LogLevel.Trace);
         }
@@ -255,37 +256,37 @@ public class Program
         LogManager.ReconfigExistingLoggers();
 
 
-        if (_fluentCommandLineParser.Object.Vss & (IsAdministrator() == false))
+        if (vss & (IsAdministrator() == false))
         {
             _logger.Error("--vss is present, but administrator rights not found. Exiting\r\n");
             return;
         }
 
         //determine file type
-        var ft = GetFileType(_fluentCommandLineParser.Object.File);
+        var ft = GetFileType(f);
         _logger.Warn($"File type: {ft}\r\n");
 
-        if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+        if (csv.IsNullOrEmpty() == false)
         {
-            if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.CsvDirectory)) == false)
+            if (Directory.ExistsDrive(Path.GetFullPath(csv)) == false)
             {
                 _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                 return;
             }
         }
 
-        if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+        if (json.IsNullOrEmpty() == false)
         {
-            if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.JsonDirectory)) == false)
+            if (Directory.ExistsDrive(Path.GetFullPath(json)) == false)
             {
                 _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                 return;
             }
         }
 
-        if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false)
+        if (body.IsNullOrEmpty() == false)
         {
-            if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.BodyDirectory)) == false)
+            if (Directory.ExistsDrive(Path.GetFullPath(body)) == false)
             {
                 _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                 return;
@@ -296,36 +297,46 @@ public class Program
         switch (ft)
         {
             case FileType.Mft:
-                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
-                    _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() &&
-                    _fluentCommandLineParser.Object.DumpEntry.IsNullOrEmpty() &&
-                    _fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() &&
-                    _fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty())
+                if (csv.IsNullOrEmpty() &&
+                    json.IsNullOrEmpty() &&
+                    de.IsNullOrEmpty() &&
+                    body.IsNullOrEmpty() &&
+                    dd.IsNullOrEmpty())
                 {
-                    _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+                    var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+
+                    helpBld.Write(hc);
 
                     _logger.Warn("--csv, --json, --body, --dd, or --de is required. Exiting");
                     return;
                 }
 
-                if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false &&
-                    _fluentCommandLineParser.Object.BodyDriveLetter.IsNullOrEmpty())
+                if (body.IsNullOrEmpty() == false &&
+                    bdl.IsNullOrEmpty())
                 {
-                    _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+                    var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+
+                    helpBld.Write(hc);
 
                     _logger.Warn("--bdl is required when using --body. Exiting");
                     return;
                 }
 
-                if (_fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty() == false)
+                if (@do.IsNullOrEmpty() == false)
                 {
-                    if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty())
+                    if (dd.IsNullOrEmpty())
                     {
+                        var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+                        var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
 
-                        _logger.Error("--dd option missing. Exiting\r\n");
+                        helpBld.Write(hc);
+                        
+                        _logger.Warn("--dd option missing. Exiting\r\n");
                         return;
                     }
-                    if (Directory.ExistsDrive(Path.GetFullPath(_fluentCommandLineParser.Object.DumpDir)) == false)
+                    if (Directory.ExistsDrive(Path.GetFullPath(dd)) == false)
                     {
                         _logger.Error("Destination location not available. Verify drive letter and try again. Exiting\r\n");
                         return;
@@ -334,79 +345,88 @@ public class Program
 
 
 
-                if (_fluentCommandLineParser.Object.DumpDir.IsNullOrEmpty() == false &&
-                    _fluentCommandLineParser.Object.DumpOffset.IsNullOrEmpty())
+                if (dd.IsNullOrEmpty() == false &&
+                    @do.IsNullOrEmpty())
                 {
-                    _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+                    var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+
+                    helpBld.Write(hc);
 
                     _logger.Warn("--do is required when using --dd. Exiting");
                     return;
                 }
 
-                ProcessMft(_fluentCommandLineParser.Object.File);
+                ProcessMft(f,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at);
                 break;
             case FileType.LogFile:
                 _logger.Warn("$LogFile not supported yet. Exiting");
                 return;
             case FileType.UsnJournal:
-                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() && _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty()
+                if (csv.IsNullOrEmpty() && json.IsNullOrEmpty()
                    )
                 {
-                    _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+                    var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+
+                    helpBld.Write(hc);
 
                     _logger.Warn("--csv or --json is required. Exiting");
                     return;
                 }
 
-                if (_fluentCommandLineParser.Object.MftFile.IsNullOrEmpty() == false)
+                if (m.IsNullOrEmpty() == false)
                 {
                     //mft was supplied, does it exist?
-                    if (File.Exists(_fluentCommandLineParser.Object.MftFile) == false)
+                    if (File.Exists(m) == false)
                     {
-                        _logger.Error($"MFT file '{_fluentCommandLineParser.Object.MftFile}' does not exist! Verify path and try again. Exiting\r\n");
+                        _logger.Error($"MFT file '{m}' does not exist! Verify path and try again. Exiting\r\n");
                         return;
                     }
 
-                    var ftm = GetFileType(_fluentCommandLineParser.Object.MftFile);
+                    var ftm = GetFileType(m);
 
                     if (ftm != FileType.Mft)
                     {
-                        _logger.Error($"File '{_fluentCommandLineParser.Object.MftFile}' is not an MFT file!! Verify path and try again. Exiting\r\n");
+                        _logger.Error($"File '{m}' is not an MFT file!! Verify path and try again. Exiting\r\n");
                         return;
                     }
 
-                    ProcessMft(_fluentCommandLineParser.Object.MftFile);
+                    ProcessMft(m,vss,dedupe,body,bdl,bodyf,blf,csv,csvf,json,jsonf,fl,dt,dd,@do,fls,sn,at);
 
                 }
-                    
-                ProcessJ();
+
+                ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
                 break;
             case FileType.Boot:
-                ProcessBoot();
+                ProcessBoot(f, vss, dedupe, csv, csvf);
                 break;
             case FileType.Sds:
-                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() &&
-                    _fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty())
+                if (csv.IsNullOrEmpty() &&
+                    ds.IsNullOrEmpty())
 
                 {
-                    _fluentCommandLineParser.HelpOption.ShowHelp(_fluentCommandLineParser.Options);
+                    var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+                    var hc = new HelpContext(helpBld,_rootCommand,Console.Out);
+
+                    helpBld.Write(hc);
 
                     _logger.Warn("--csv or --ds is required. Exiting");
                     return;
                 }
 
-                ProcessSds();
+                ProcessSds(f, vss, dedupe, csv, csvf, ds);
                 break;
 
             default:
                 //unknown
                 _logger.Error(
-                    $"Unknown file type! Send '{_fluentCommandLineParser.Object.File}' to saericzimmerman@gmail.com for assistance. Exiting");
+                    $"Unknown file type! Send '{f}' to saericzimmerman@gmail.com for assistance. Exiting");
                 return;
         }
     }
 
-    private static void ProcessBoot()
+    private static void ProcessBoot(string f, bool vss, bool dedupe, string csv, string csvf)
     {
         var sw = new Stopwatch();
         sw.Start();
@@ -418,14 +438,14 @@ public class Program
 
             try
             {
-                bf = BootFile.Load(_fluentCommandLineParser.Object.File);
-                bootFiles.Add(_fluentCommandLineParser.Object.File, bf);
+                bf = BootFile.Load(f);
+                bootFiles.Add(f, bf);
 
                 var ll = new List<string>();
 
-                if (_fluentCommandLineParser.Object.Vss)
+                if (vss)
                 {
-                    var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
+                    var dl = Path.GetPathRoot(Path.GetFullPath(f));
 
                     var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -434,7 +454,7 @@ public class Program
                         var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Boot";
                         ll.Add(vsp);
                     }
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                    var rawFiles = Helper.GetFiles(ll, dedupe);
                         
                     foreach (var rawCopyReturn in rawFiles) 
                     { 
@@ -449,13 +469,13 @@ public class Program
             {
                 try
                 {
-                    _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+                    _logger.Warn($"'{f}' is in use. Rerouting...\r\n");
 
-                    var ll = new List<string> {_fluentCommandLineParser.Object.File};
+                    var ll = new List<string> {f};
 
-                    if (_fluentCommandLineParser.Object.Vss)
+                    if (vss)
                     {
-                        var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
+                        var dl = Path.GetPathRoot(Path.GetFullPath(f));
 
                         var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -466,7 +486,7 @@ public class Program
                         }
                     }
 
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                    var rawFiles = Helper.GetFiles(ll, dedupe);
 
                     foreach (var rawCopyReturn in rawFiles)
                     {
@@ -491,38 +511,38 @@ public class Program
             }
 
             _logger.Info(
-                $"\r\nProcessed '{_fluentCommandLineParser.Object.File}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
+                $"\r\nProcessed '{f}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
 
             StreamWriter swCsv = null;
         
 
-            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+            if (csv.IsNullOrEmpty() == false)
             {
-                if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                if (Directory.Exists(csv) == false)
                 {
                     _logger.Warn(
-                        $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                        $"Path to '{csv}' doesn't exist. Creating...");
 
                     try
                     {
-                        Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                        Directory.CreateDirectory(csv);
                     }
                     catch (Exception)
                     {
                         _logger.Fatal(
-                            $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                            $"Unable to create directory '{csv}'. Does a file with the same name exist? Exiting");
                         return;
                     }
                 }
 
                 var outName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
 
-                if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                if (csvf.IsNullOrEmpty() == false)
                 {
-                    outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                    outName = Path.GetFileName(csvf);
                 }
 
-                var outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                var outFile = Path.Combine(csv, outName);
 
                 _logger.Warn($"CSV output will be saved to '{outFile}'\r\n");
 
@@ -595,7 +615,7 @@ public class Program
         }
     }
 
-    private static void ProcessJ()
+    private static void ProcessJ(string f, bool vss, bool dedupe, string csv, string csvf,string json, string jsonf, string dt)
     {
         var sw = new Stopwatch();
         sw.Start();
@@ -609,14 +629,14 @@ public class Program
 
             try
             {
-                j = UsnFile.Load(_fluentCommandLineParser.Object.File);
-                jFiles.Add(_fluentCommandLineParser.Object.File, j);
+                j = UsnFile.Load(f);
+                jFiles.Add(f, j);
 
                 var ll = new List<string>();
 
-                if (_fluentCommandLineParser.Object.Vss)
+                if (vss)
                 {
-                    var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
+                    var dl = Path.GetPathRoot(Path.GetFullPath(f));
 
                     var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -626,7 +646,7 @@ public class Program
                         ll.Add(vsp);
                     }
 
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                    var rawFiles = Helper.GetFiles(ll, dedupe);
 
                     foreach (var rawCopyReturn in rawFiles)
                     {
@@ -643,13 +663,13 @@ public class Program
             {
                 try
                 {
-                    _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+                    _logger.Warn($"'{f}' is in use. Rerouting...\r\n");
 
-                    var ll = new List<string> {_fluentCommandLineParser.Object.File};
+                    var ll = new List<string> {f};
 
-                    if (_fluentCommandLineParser.Object.Vss)
+                    if (vss)
                     {
-                        var dl = Path.GetPathRoot(_fluentCommandLineParser.Object.File);
+                        var dl = Path.GetPathRoot(f);
 
                         var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -660,7 +680,7 @@ public class Program
                         }
                     }
 
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                    var rawFiles = Helper.GetFiles(ll, dedupe);
 
                     foreach (var rawCopyReturn in rawFiles)
                     {
@@ -676,7 +696,7 @@ public class Program
                 }
             }
 
-            var dt = DateTimeOffset.UtcNow;
+            var dateTimeOffset = DateTimeOffset.UtcNow;
 
             sw.Stop();
 
@@ -688,10 +708,10 @@ public class Program
             }
 
             _logger.Info(
-                $"\r\nProcessed '{_fluentCommandLineParser.Object.File}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds");
+                $"\r\nProcessed '{f}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds");
             Console.WriteLine();
 
-            if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+            if (json.IsNullOrEmpty() == false)
             {
                 _jOutRecords = new List<JEntryOut>();
             }
@@ -700,23 +720,23 @@ public class Program
             {
                 _logger.Info($"Usn entries found in '{jFile.Key}': {jFile.Value.UsnEntries.Count:N0}");
 
-                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+                if (csv.IsNullOrEmpty() == false)
                 {
-                    StreamWriter swCsv = null;
+                    StreamWriter swCsv;
 
-                    if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                    if (Directory.Exists(csv) == false)
                     {
                         _logger.Warn(
-                            $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                            $"Path to '{csv}' doesn't exist. Creating...");
 
                         try
                         {
-                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                            Directory.CreateDirectory(csv);
                         }
                         catch (Exception)
                         {
                             _logger.Fatal(
-                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                                $"Unable to create directory '{csv}'. Does a file with the same name exist? Exiting");
                             return;
                         }
                     }
@@ -730,26 +750,26 @@ public class Program
                         var vssTime = Helper.GetVssCreationDate(vssNumber);
 
                         outName =
-                            $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$J_Output.csv";
+                            $"{dateTimeOffset:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$J_Output.csv";
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        if (csvf.IsNullOrEmpty() == false)
                         {
                             outName =
-                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.CsvName)}";
+                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(csvf)}";
                         }
                     }
                     else
                     {
                         //normal file
-                        outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
+                        outName = $"{dateTimeOffset:yyyyMMddHHmmss}_MFTECmd_$J_Output.csv";
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        if (csvf.IsNullOrEmpty() == false)
                         {
-                            outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                            outName = Path.GetFileName(csvf);
                         }
                     }
 
-                    outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                    outFile = Path.Combine(csv, outName);
 
                     _logger.Warn($"\tCSV output will be saved to '{outFile}'");
 
@@ -760,7 +780,7 @@ public class Program
                     var foo = _csvWriter.Context.AutoMap<JEntryOut>();
 
                     foo.Map(t => t.UpdateTimestamp).Convert(t =>
-                        $"{t.Value.UpdateTimestamp.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+                        $"{t.Value.UpdateTimestamp.ToString(dt)}");
 
                     _csvWriter.Context.RegisterClassMap(foo);
 
@@ -837,24 +857,24 @@ public class Program
                         
                     }
 
-                    if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+                    if (json.IsNullOrEmpty() == false)
                     {
                         string outName;
                         string outFile;
 
-                        if (Directory.Exists(_fluentCommandLineParser.Object.JsonDirectory) == false)
+                        if (Directory.Exists(json) == false)
                         {
                             _logger.Warn(
-                                $"Path to '{_fluentCommandLineParser.Object.JsonDirectory}' doesn't exist. Creating...");
+                                $"Path to '{json}' doesn't exist. Creating...");
 
                             try
                             {
-                                Directory.CreateDirectory(_fluentCommandLineParser.Object.JsonDirectory);
+                                Directory.CreateDirectory(json);
                             }
                             catch (Exception)
                             {
                                 _logger.Fatal(
-                                    $"Unable to create directory '{_fluentCommandLineParser.Object.JsonDirectory}'. Does a file with the same name exist? Exiting");
+                                    $"Unable to create directory '{json}'. Does a file with the same name exist? Exiting");
                                 return;
                             }
                         }
@@ -865,26 +885,26 @@ public class Program
                             var vssTime = Helper.GetVssCreationDate(vssNumber);
 
                             outName =
-                                $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$J_Output.json";
+                                $"{dateTimeOffset:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$J_Output.json";
 
-                            if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
+                            if (jsonf.IsNullOrEmpty() == false)
                             {
                                 outName =
-                                    $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.JsonName)}";
+                                    $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(jsonf)}";
                             }
                         }
                         else
                         {
                             //normal file
-                            outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$J_Output.json";
+                            outName = $"{dateTimeOffset:yyyyMMddHHmmss}_MFTECmd_$J_Output.json";
 
-                            if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
+                            if (jsonf.IsNullOrEmpty() == false)
                             {
-                                outName = Path.GetFileName(_fluentCommandLineParser.Object.JsonName);
+                                outName = Path.GetFileName(jsonf);
                             }
                         }
 
-                        outFile = Path.Combine(_fluentCommandLineParser.Object.JsonDirectory, outName);
+                        outFile = Path.Combine(json, outName);
 
                         _logger.Warn($"\tJSON output will be saved to '{outFile}'");
 
@@ -917,9 +937,6 @@ public class Program
 
                 }
 
-
-
-
                 Console.WriteLine();
             }
         }
@@ -930,7 +947,7 @@ public class Program
         }
     }
 
-    private static void ProcessSds()
+    private static void ProcessSds(string f, bool vss, bool dedupe, string csv, string csvf, string ds)
     {
         var sw = new Stopwatch();
         sw.Start();
@@ -942,14 +959,14 @@ public class Program
 
             try
             {
-                sds = SdsFile.Load(_fluentCommandLineParser.Object.File);
-                sdsFiles.Add(_fluentCommandLineParser.Object.File, sds);
+                sds = SdsFile.Load(f);
+                sdsFiles.Add(f, sds);
 
                 var ll = new List<string>();
 
-                if (_fluentCommandLineParser.Object.Vss)
+                if (vss)
                 {
-                    var dl = Path.GetPathRoot(Path.GetFullPath(_fluentCommandLineParser.Object.File));
+                    var dl = Path.GetPathRoot(Path.GetFullPath(f));
 
                     var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -958,7 +975,7 @@ public class Program
                         var vsp = $"{Helper.GetRawVolumePath(vssInfo.VssNumber)}\\$Secure:$SDS";
                         ll.Add(vsp);
                     }
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                    var rawFiles = Helper.GetFiles(ll, dedupe);
 
                     foreach (var rawCopyReturn in rawFiles)
                     {
@@ -973,13 +990,13 @@ public class Program
             {
                 try
                 {
-                    _logger.Warn($"'{_fluentCommandLineParser.Object.File}' is in use. Rerouting...\r\n");
+                    _logger.Warn($"'{f}' is in use. Rerouting...\r\n");
 
-                    var ll = new List<string> {_fluentCommandLineParser.Object.File};
+                    var ll = new List<string> {f};
 
-                    if (_fluentCommandLineParser.Object.Vss)
+                    if (vss)
                     {
-                        var dl = Path.GetPathRoot(_fluentCommandLineParser.Object.File);
+                        var dl = Path.GetPathRoot(f);
 
                         var vssInfos = Helper.GetVssInfoViaWmi(dl);
 
@@ -990,7 +1007,7 @@ public class Program
                         }
                     }
 
-                    var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                    var rawFiles = Helper.GetFiles(ll, dedupe);
 
                     foreach (var rawCopyReturn in rawFiles)
                     {
@@ -1015,7 +1032,7 @@ public class Program
             }
 
             _logger.Info(
-                $"\r\nProcessed '{_fluentCommandLineParser.Object.File}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds");
+                $"\r\nProcessed '{f}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds");
             Console.WriteLine();
 
             var dt = DateTimeOffset.UtcNow;
@@ -1024,23 +1041,23 @@ public class Program
             {
                 _logger.Info($"SDS entries found in '{sdsFile.Key}': {sdsFile.Value.SdsEntries.Count:N0}");
 
-                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+                if (csv.IsNullOrEmpty() == false)
                 {
-                    StreamWriter swCsv = null;
+                    StreamWriter swCsv;
 
-                    if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                    if (Directory.Exists(csv) == false)
                     {
                         _logger.Warn(
-                            $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                            $"Path to '{csv}' doesn't exist. Creating...");
 
                         try
                         {
-                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                            Directory.CreateDirectory(csv);
                         }
                         catch (Exception)
                         {
                             _logger.Fatal(
-                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                                $"Unable to create directory '{csv}'. Does a file with the same name exist? Exiting");
                             return;
                         }
                     }
@@ -1056,10 +1073,10 @@ public class Program
                         outName =
                             $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$SDS_Output.csv";
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        if (csvf.IsNullOrEmpty() == false)
                         {
                             outName =
-                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.CsvName)}";
+                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(csvf)}";
                         }
                     }
                     else
@@ -1067,13 +1084,13 @@ public class Program
                         //normal file
                         outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        if (csvf.IsNullOrEmpty() == false)
                         {
-                            outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                            outName = Path.GetFileName(csvf);
                         }
                     }
 
-                    outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                    outFile = Path.Combine(csv, outName);
 
                     _logger.Warn($"\tCSV output will be saved to '{outFile}'");
 
@@ -1142,26 +1159,26 @@ public class Program
             }
 
 
-            if (_fluentCommandLineParser.Object.DumpSecurity.IsNullOrEmpty() == false)
+            if (ds.IsNullOrEmpty() == false)
             {
                 bool valOk;
                 int secId;
 
-                if (_fluentCommandLineParser.Object.DumpSecurity.ToUpperInvariant().StartsWith("0X"))
+                if (ds.ToUpperInvariant().StartsWith("0X"))
                 {
-                    var rawNum = _fluentCommandLineParser.Object.DumpSecurity.ToUpperInvariant().Replace("0X", "");
+                    var rawNum = ds.ToUpperInvariant().Replace("0X", "");
 
                     valOk = int.TryParse(rawNum, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out secId);
                 }
                 else
                 {
-                    valOk = int.TryParse(_fluentCommandLineParser.Object.DumpSecurity, out secId);
+                    valOk = int.TryParse(ds, out secId);
                 }
 
                 if (valOk == false)
                 {
                     _logger.Warn(
-                        $"Could not parse '{_fluentCommandLineParser.Object.DumpSecurity}' to valid value. Exiting");
+                        $"Could not parse '{ds}' to valid value. Exiting");
                     return;
                 }
 
@@ -1253,7 +1270,7 @@ public class Program
         }
     }
 
-    private static void ProcessMft(string file)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl,string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1269,7 +1286,7 @@ public class Program
 
             var ll = new List<string>();
 
-            if (_fluentCommandLineParser.Object.Vss)
+            if (vss)
             {
                 var dl = Path.GetPathRoot(Path.GetFullPath(file));
 
@@ -1281,7 +1298,7 @@ public class Program
                     ll.Add(vsp);
                 }
 
-                var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                var rawFiles = Helper.GetFiles(ll, dedupe);
 
                 foreach (var rawCopyReturn in rawFiles)
                 {
@@ -1296,7 +1313,7 @@ public class Program
 
             var ll = new List<string> {file};
 
-            if (_fluentCommandLineParser.Object.Vss)
+            if (vss)
             {
                 var dl = Path.GetPathRoot(file);
 
@@ -1311,7 +1328,7 @@ public class Program
 
             try
             {
-                var rawFiles = Helper.GetFiles(ll, _fluentCommandLineParser.Object.Dedupe);
+                var rawFiles = Helper.GetFiles(ll, dedupe);
 
                 foreach (var rawCopyReturn in rawFiles)
                 {
@@ -1345,7 +1362,7 @@ public class Program
         _logger.Info(
             $"Processed '{file}'{extra} in {sw.Elapsed.TotalSeconds:N4} seconds\r\n");
 
-        var dt = DateTimeOffset.UtcNow;
+        var dateTimeOffset = DateTimeOffset.UtcNow;
 
         foreach (var mftFile in mftFiles)
         {
@@ -1357,23 +1374,23 @@ public class Program
             StreamWriter swFileList = null;
                 
 
-            if (_fluentCommandLineParser.Object.BodyDirectory.IsNullOrEmpty() == false)
+            if (body.IsNullOrEmpty() == false)
             {
-                _fluentCommandLineParser.Object.BodyDriveLetter =
-                    _fluentCommandLineParser.Object.BodyDriveLetter.Substring(0, 1);
+                bdl =
+                    bdl.Substring(0, 1);
 
-                if (Directory.Exists(_fluentCommandLineParser.Object.BodyDirectory) == false)
+                if (Directory.Exists(body) == false)
                 {
                     _logger.Warn(
-                        $"Path to '{_fluentCommandLineParser.Object.BodyDirectory}' doesn't exist. Creating...");
+                        $"Path to '{body}' doesn't exist. Creating...");
                     try
                     {
-                        Directory.CreateDirectory(_fluentCommandLineParser.Object.BodyDirectory);
+                        Directory.CreateDirectory(body);
                     }
                     catch (Exception)
                     {
                         _logger.Fatal(
-                            $"Unable to create directory '{_fluentCommandLineParser.Object.BodyDirectory}'. Does a file with the same name exist? Exiting");
+                            $"Unable to create directory '{body}'. Does a file with the same name exist? Exiting");
                         return;
                     }
                 }
@@ -1387,33 +1404,33 @@ public class Program
                     var vssTime = Helper.GetVssCreationDate(vssNumber);
 
                     outName =
-                        $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$MFT_Output.body";
+                        $"{dateTimeOffset:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$MFT_Output.body";
 
-                    if (_fluentCommandLineParser.Object.BodyName.IsNullOrEmpty() == false)
+                    if (bodyf.IsNullOrEmpty() == false)
                     {
                         outName =
-                            $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.BodyName)}";
+                            $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(bodyf)}";
                     }
                 }
                 else
                 {
                     //normal file
-                    outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.body";
+                    outName = $"{dateTimeOffset:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.body";
 
-                    if (_fluentCommandLineParser.Object.BodyName.IsNullOrEmpty() == false)
+                    if (bodyf.IsNullOrEmpty() == false)
                     {
-                        outName = Path.GetFileName(_fluentCommandLineParser.Object.BodyName);
+                        outName = Path.GetFileName(bodyf);
                     }
                 }
 
-                outFile = Path.Combine(_fluentCommandLineParser.Object.BodyDirectory, outName);
+                outFile = Path.Combine(body, outName);
 
                 _logger.Warn($"\tBodyfile output will be saved to '{outFile}'");
 
                 try
                 {
                     swBody = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
-                    if (_fluentCommandLineParser.Object.UseCR)
+                    if (blf)
                     {
                         swBody.NewLine = "\n";
                     }
@@ -1424,7 +1441,7 @@ public class Program
                             
                     };
 
-                    if (_fluentCommandLineParser.Object.UseCR)
+                    if (blf)
                     {
                         config.NewLine = "\n";
                     }
@@ -1454,29 +1471,29 @@ public class Program
                 }
             }
 
-            if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+            if (json.IsNullOrEmpty() == false)
             {
                 _mftOutRecords = new List<MFTRecordOut>();
                    
             }
 
-            if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false ||
-                _fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+            if (csv.IsNullOrEmpty() == false ||
+                json.IsNullOrEmpty() == false)
             {
-                if (_fluentCommandLineParser.Object.CsvDirectory.IsNullOrEmpty() == false)
+                if (csv.IsNullOrEmpty() == false)
                 {
-                    if (Directory.Exists(_fluentCommandLineParser.Object.CsvDirectory) == false)
+                    if (Directory.Exists(csv) == false)
                     {
                         _logger.Warn(
-                            $"Path to '{_fluentCommandLineParser.Object.CsvDirectory}' doesn't exist. Creating...");
+                            $"Path to '{csv}' doesn't exist. Creating...");
                         try
                         {
-                            Directory.CreateDirectory(_fluentCommandLineParser.Object.CsvDirectory);
+                            Directory.CreateDirectory(csv);
                         }
                         catch (Exception)
                         {
                             _logger.Fatal(
-                                $"Unable to create directory '{_fluentCommandLineParser.Object.CsvDirectory}'. Does a file with the same name exist? Exiting");
+                                $"Unable to create directory '{csv}'. Does a file with the same name exist? Exiting");
                             return;
                         }
                     }
@@ -1490,34 +1507,34 @@ public class Program
                         var vssTime = Helper.GetVssCreationDate(vssNumber);
 
                         outName =
-                            $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$MFT_Output.csv";
+                            $"{dateTimeOffset:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$MFT_Output.csv";
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        if (csvf.IsNullOrEmpty() == false)
                         {
                             outName =
-                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.CsvName)}";
+                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(csvf)}";
                         }
                     }
                     else
                     {
                         //normal file
-                        outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.csv";
+                        outName = $"{dateTimeOffset:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.csv";
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        if (csvf.IsNullOrEmpty() == false)
                         {
-                            outName = Path.GetFileName(_fluentCommandLineParser.Object.CsvName);
+                            outName = Path.GetFileName(csvf);
                         }
                     }
 
-                    outFile = Path.Combine(_fluentCommandLineParser.Object.CsvDirectory, outName);
+                    outFile = Path.Combine(csv, outName);
 
                     _logger.Warn($"\tCSV output will be saved to '{outFile}'");
 
-                    if (_fluentCommandLineParser.Object.FileListing)
+                    if (fl)
                     {
                         var outFileFl = outFile.Replace("$MFT_Output", "$MFT_Output_FileListing");
 
-                        if (_fluentCommandLineParser.Object.CsvName.IsNullOrEmpty() == false)
+                        if (csvf.IsNullOrEmpty() == false)
                         {
                             outFileFl = Path.Combine(Path.GetDirectoryName(outFileFl),$"{Path.GetFileNameWithoutExtension(outFileFl)}_FileListing{Path.GetExtension(outFileFl)}");
                         }
@@ -1531,9 +1548,9 @@ public class Program
 
                         _fileListWriter.Context.RegisterClassMap(foo);
                         foo.Map(t => t.Created0x10).Convert(t =>
-                            $"{t.Value.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+                            $"{t.Value.Created0x10?.ToString(dt)}");
                         foo.Map(t => t.LastModified0x10).Convert(t =>
-                            $"{t.Value.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}");
+                            $"{t.Value.LastModified0x10?.ToString(dt)}");
 
                         _fileListWriter.WriteHeader<FileListEntry>();
                         _fileListWriter.NextRecord();
@@ -1571,30 +1588,30 @@ public class Program
                         foo.Map(t => t.NameType).Index(18);
 
                         foo.Map(t => t.Created0x10).Convert(t =>
-                            $"{t.Value.Created0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(19);
+                            $"{t.Value.Created0x10?.ToString(dt)}").Index(19);
                         foo.Map(t => t.Created0x30).Convert(t =>
-                            $"{t.Value.Created0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}").Index(20);
+                            $"{t.Value.Created0x30?.ToString(dt)}").Index(20);
 
                         foo.Map(t => t.LastModified0x10).Convert(t =>
-                                $"{t.Value.LastModified0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                $"{t.Value.LastModified0x10?.ToString(dt)}")
                             .Index(21);
                         foo.Map(t => t.LastModified0x30).Convert(t =>
-                                $"{t.Value.LastModified0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                $"{t.Value.LastModified0x30?.ToString(dt)}")
                             .Index(22);
 
                         foo.Map(t => t.LastRecordChange0x10).Convert(t =>
-                                $"{t.Value.LastRecordChange0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                $"{t.Value.LastRecordChange0x10?.ToString(dt)}")
                             .Index(23);
                         foo.Map(t => t.LastRecordChange0x30).Convert(t =>
-                                $"{t.Value.LastRecordChange0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                $"{t.Value.LastRecordChange0x30?.ToString(dt)}")
                             .Index(24);
 
                         foo.Map(t => t.LastAccess0x10).Convert(t =>
-                                $"{t.Value.LastAccess0x10?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                $"{t.Value.LastAccess0x10?.ToString(dt)}")
                             .Index(25);
 
                         foo.Map(t => t.LastAccess0x30).Convert(t =>
-                                $"{t.Value.LastAccess0x30?.ToString(_fluentCommandLineParser.Object.DateTimeFormat)}")
+                                $"{t.Value.LastAccess0x30?.ToString(dt)}")
                             .Index(26);
 
                         foo.Map(t => t.UpdateSequenceNumber).Index(27);
@@ -1626,8 +1643,8 @@ public class Program
             {
                 try
                 {
-                    ProcessRecords(mftFile.Value.FileRecords);
-                    ProcessRecords(mftFile.Value.FreeFileRecords);
+                    ProcessRecords(mftFile.Value.FileRecords,includeShort,alltimestamp,bdl);
+                    ProcessRecords(mftFile.Value.FreeFileRecords,includeShort,alltimestamp,bdl);
                 }
                 catch (Exception ex)
                 {
@@ -1645,26 +1662,26 @@ public class Program
             swBody?.Flush();
             swBody?.Close();
 
-            if (_fluentCommandLineParser.Object.JsonDirectory.IsNullOrEmpty() == false)
+            if (json.IsNullOrEmpty() == false)
             {
                 //write json
 
                 string outName;
                 string outFile;
 
-                if (Directory.Exists(_fluentCommandLineParser.Object.JsonDirectory) == false)
+                if (Directory.Exists(json) == false)
                 {
                     _logger.Warn(
-                        $"Path to '{_fluentCommandLineParser.Object.JsonDirectory}' doesn't exist. Creating...");
+                        $"Path to '{json}' doesn't exist. Creating...");
 
                     try
                     {
-                        Directory.CreateDirectory(_fluentCommandLineParser.Object.JsonDirectory);
+                        Directory.CreateDirectory(json);
                     }
                     catch (Exception)
                     {
                         _logger.Fatal(
-                            $"Unable to create directory '{_fluentCommandLineParser.Object.JsonDirectory}'. Does a file with the same name exist? Exiting");
+                            $"Unable to create directory '{json}'. Does a file with the same name exist? Exiting");
                         return;
                     }
                 }
@@ -1675,26 +1692,26 @@ public class Program
                     var vssTime = Helper.GetVssCreationDate(vssNumber);
 
                     outName =
-                        $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$MFT_Output.json";
+                        $"{dateTimeOffset:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$MFT_Output.json";
 
-                    if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
+                    if (jsonf.IsNullOrEmpty() == false)
                     {
                         outName =
-                            $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(_fluentCommandLineParser.Object.JsonName)}";
+                            $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(jsonf)}";
                     }
                 }
                 else
                 {
                     //normal file
-                    outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.json";
+                    outName = $"{dateTimeOffset:yyyyMMddHHmmss}_MFTECmd_$MFT_Output.json";
 
-                    if (_fluentCommandLineParser.Object.JsonName.IsNullOrEmpty() == false)
+                    if (jsonf.IsNullOrEmpty() == false)
                     {
-                        outName = Path.GetFileName(_fluentCommandLineParser.Object.JsonName);
+                        outName = Path.GetFileName(jsonf);
                     }
                 }
 
-                outFile = Path.Combine(_fluentCommandLineParser.Object.JsonDirectory, outName);
+                outFile = Path.Combine(json, outName);
 
                 _logger.Warn($"\tJSON output will be saved to '{outFile}'");
 
@@ -1730,32 +1747,32 @@ public class Program
 
         #region ExportRecord
 
-        if (UsefulExtension.IsNullOrEmpty(_fluentCommandLineParser.Object.DumpDir) == false)
+        if (dd.IsNullOrEmpty() == false)
         {
             _logger.Info("");
 
             bool offsetOk;
             long offset;
 
-            if (_fluentCommandLineParser.Object.DumpOffset.StartsWith("0x"))
+            if (@do.StartsWith("0x"))
             {
-                offsetOk = long.TryParse(_fluentCommandLineParser.Object.DumpOffset.Replace("0x", ""),
+                offsetOk = long.TryParse(@do.Replace("0x", ""),
                     NumberStyles.HexNumber, CultureInfo.InvariantCulture, out offset);
             }
             else
             {
-                offsetOk = long.TryParse(_fluentCommandLineParser.Object.DumpOffset, out offset);
+                offsetOk = long.TryParse(@do, out offset);
             }
 
             if (offsetOk)
             {
-                using var b = new BinaryReader(File.OpenRead(_fluentCommandLineParser.Object.File));
+                using var b = new BinaryReader(File.OpenRead(file));
                 b.BaseStream.Seek(offset * _mft.FileRecords.Values.First().AllocatedRecordSize, 0); // offset is the FILE entry, so we need to multiply it by the size of the record, typically 1024, but dont assume that 
 
                 var fileBytes = b.ReadBytes(1024);
 
                 var outFile = $"MFTECmd_FILE_Offset0x{offset:X}.bin";
-                var outFull = Path.Combine(_fluentCommandLineParser.Object.DumpDir, outFile);
+                var outFull = Path.Combine(dd, outFile);
 
                 File.WriteAllBytes(outFull, fileBytes);
 
@@ -1764,7 +1781,7 @@ public class Program
             else
             {
                 _logger.Warn(
-                    $"Could not parse '{_fluentCommandLineParser.Object.DumpOffset}' to valid value. Exiting");
+                    $"Could not parse '{@do}' to valid value. Exiting");
                 return;
             }
         }
@@ -1773,13 +1790,13 @@ public class Program
 
         #region DumpEntry
 
-        if (UsefulExtension.IsNullOrEmpty(_fluentCommandLineParser.Object.DumpEntry) == false)
+        if (@do.IsNullOrEmpty() == false)
         {
             _logger.Info("");
 
             FileRecord fr = null;
 
-            var segs = _fluentCommandLineParser.Object.DumpEntry.Split('-');
+            var segs = @do.Split('-');
 
             bool entryOk;
             bool seqOk;
@@ -1791,13 +1808,13 @@ public class Program
             if (segs.Length == 2)
             {
                 _logger.Warn(
-                    $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
+                    $"Could not parse '{@do}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting");
                 return;
             }
 
             if (segs.Length == 1)
             {
-                if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                if (@do.StartsWith("0x"))
                 {
                     var seg0 = segs[0].Replace("0x", "");
 
@@ -1849,7 +1866,7 @@ public class Program
 
             if (key.Length == 0)
             {
-                if (_fluentCommandLineParser.Object.DumpEntry.StartsWith("0x"))
+                if (@do.StartsWith("0x"))
                 {
                     var seg0 = segs[0].Replace("0x", "");
                     var seg1 = segs[1].Replace("0x", "");
@@ -1866,7 +1883,7 @@ public class Program
                 if (entryOk == false || seqOk == false)
                 {
                     _logger.Warn(
-                        $"Could not parse '{_fluentCommandLineParser.Object.DumpEntry}' to valid values. Exiting");
+                        $"Could not parse '{@do}' to valid values. Exiting");
                     return;
                 }
 
@@ -1886,11 +1903,11 @@ public class Program
             if (fr == null)
             {
                 _logger.Warn(
-                    $"Could not find file record with entry/seq '{_fluentCommandLineParser.Object.DumpEntry}'. Exiting");
+                    $"Could not find file record with entry/seq '{@do}'. Exiting");
                 return;
             }
 
-            if (fr.IsDirectory() && _fluentCommandLineParser.Object.Fls)
+            if (fr.IsDirectory() && fls)
             {
                 var dlist = _mft.GetDirectoryContents(key);
                 var fn = fr.Attributes.FirstOrDefault(t => t.AttributeType == AttributeType.FileName) as FileName;
@@ -1907,11 +1924,11 @@ public class Program
                 {
                     if (parentMapEntry.IsDirectory)
                     {
-                        _logger.Error($"{parentMapEntry.Key.PadRight(16)}\t{parentMapEntry.FileName} ");
+                        _logger.Error($"{parentMapEntry.Key,-16}\t{parentMapEntry.FileName} ");
                     }
                     else
                     {
-                        _logger.Info($"{parentMapEntry.Key.PadRight(16)}\t{parentMapEntry.FileName} ");
+                        _logger.Info($"{parentMapEntry.Key,-16}\t{parentMapEntry.FileName} ");
                     }
                 }
 
@@ -1962,7 +1979,7 @@ public class Program
                 catch (Exception e)
                 {
                     _logger.Fatal(
-                        $"\r\nError opening file '{_fluentCommandLineParser.Object.File}'. Does it exist? Error: {e.Message} Exiting\r\n");
+                        $"\r\nError opening file '{file}'. Does it exist? Error: {e.Message} Exiting\r\n");
                     Environment.Exit(-1);
                 }
             }
@@ -1970,7 +1987,7 @@ public class Program
             if (buff.Length < 20)
             {
                 _logger.Fatal(
-                    $"\r\nNot enough data found in '{_fluentCommandLineParser.Object.File}'. Is the file empty? Exiting\r\n");
+                    $"\r\nNot enough data found in '{file}'. Is the file empty? Exiting\r\n");
                 Environment.Exit(-1);
             }
 
@@ -2035,14 +2052,14 @@ public class Program
         catch (UnauthorizedAccessException)
         {
             _logger.Fatal(
-                $"\r\nCould not access '{_fluentCommandLineParser.Object.File}'. Rerun the program as an administrator.\r\n");
+                $"\r\nCould not access '{file}'. Rerun the program as an administrator.\r\n");
             Environment.Exit(-1);
         }
 
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl)
     {
         foreach (var fr in records)
         {
@@ -2062,21 +2079,19 @@ public class Program
                          t.AttributeType == AttributeType.FileName).OrderBy(t => ((FileName) t).FileInfo.NameType))
             {
                 var fn = (FileName) attribute;
-                if (_fluentCommandLineParser.Object.IncludeShortNames == false &&
+                if (includeShort == false &&
                     fn.FileInfo.NameType == NameTypes.Dos)
                 {
                     continue;
                 }
 
-                var mftr = GetCsvData(fr.Value, fn, null);
+                var mftr = GetCsvData(fr.Value, fn, null,alltimestamp);
 
                 var ads = fr.Value.GetAlternateDataStreams();
 
                 mftr.HasAds = ads.Any();
 
                 _csvWriter?.WriteRecord(mftr);
-
-                
 
                 _mftOutRecords?.Add(mftr);
 
@@ -2091,12 +2106,12 @@ public class Program
 
                 if (_bodyWriter != null)
                 {
-                    var f = GetBodyData(mftr, true);
+                    var f = GetBodyData(mftr, true,bdl);
 
                     _bodyWriter.WriteRecord(f);
                     _bodyWriter.NextRecord();
 
-                    f = GetBodyData(mftr, false);
+                    f = GetBodyData(mftr, false,bdl);
 
                     _bodyWriter.WriteRecord(f);
                     _bodyWriter.NextRecord();
@@ -2105,7 +2120,7 @@ public class Program
 
                 foreach (var adsInfo in ads)
                 {
-                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo);
+                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo,alltimestamp);
                     adsRecord.IsAds = true;
                     adsRecord.OtherAttributeId = adsInfo.AttributeId;
                     _csvWriter?.WriteRecord(adsRecord);
@@ -2122,7 +2137,7 @@ public class Program
 
                     if (_bodyWriter != null)
                     {
-                        var f1 = GetBodyData(adsRecord, true);
+                        var f1 = GetBodyData(adsRecord, true,bdl);
 
                         _bodyWriter.WriteRecord(f1);
                         _bodyWriter.NextRecord();
@@ -2132,12 +2147,12 @@ public class Program
         }
     }
 
-    private static BodyFile GetBodyData(MFTRecordOut mftr, bool getStandardInfo)
+    private static BodyFile GetBodyData(MFTRecordOut mftr, bool getStandardInfo, string bdl)
     {
         var b = new BodyFile
         {
             Name =
-                $"{_fluentCommandLineParser.Object.BodyDriveLetter.ToLowerInvariant()}:{mftr.ParentPath.Substring(1)}\\{mftr.FileName}"
+                $"{bdl.ToLowerInvariant()}:{mftr.ParentPath.Substring(1)}\\{mftr.FileName}"
                     .Replace("\\", "/"),
             Gid = 0,
             Uid = 0,
@@ -2239,7 +2254,7 @@ public class Program
         return b;
     }
 
-    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo)
+    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp)
     {
         var mftr = new MFTRecordOut
         {
@@ -2273,9 +2288,6 @@ public class Program
         {
             mftr.FileName = $"{mftr.FileName}:{adsinfo.Name}";
             mftr.FileSize = adsinfo.Size;
-
-                
-
             try
             {
                 mftr.Extension = Path.GetExtension(adsinfo.Name);
@@ -2338,24 +2350,24 @@ public class Program
 
             mftr.Copied = si.ContentModifiedOn < si.CreatedOn;
 
-            if (_fluentCommandLineParser.Object.AllTimeStampsAllTime || fn.FileInfo.CreatedOn != si.CreatedOn)
+            if (alltimestamp || fn.FileInfo.CreatedOn != si.CreatedOn)
             {
                 mftr.Created0x30 = fn.FileInfo.CreatedOn;
             }
 
-            if (_fluentCommandLineParser.Object.AllTimeStampsAllTime ||
+            if (alltimestamp ||
                 fn.FileInfo.ContentModifiedOn != si.ContentModifiedOn)
             {
                 mftr.LastModified0x30 = fn.FileInfo.ContentModifiedOn;
             }
 
-            if (_fluentCommandLineParser.Object.AllTimeStampsAllTime ||
+            if (alltimestamp ||
                 fn.FileInfo.RecordModifiedOn != si.RecordModifiedOn)
             {
                 mftr.LastRecordChange0x30 = fn.FileInfo.RecordModifiedOn;
             }
 
-            if (_fluentCommandLineParser.Object.AllTimeStampsAllTime ||
+            if (alltimestamp ||
                 fn.FileInfo.LastAccessedOn != si.LastAccessedOn)
             {
                 mftr.LastAccess0x30 = fn.FileInfo.LastAccessedOn;
@@ -2452,7 +2464,7 @@ internal class ApplicationArguments
 
     public string BodyDirectory { get; set; }
     public string BodyDriveLetter { get; set; }
-    public bool UseCR { get; set; }
+    public bool UseCr { get; set; }
 
     public string CsvName { get; set; }
     public string JsonName { get; set; }
