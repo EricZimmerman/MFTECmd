@@ -36,7 +36,7 @@ using Path = Alphaleonis.Win32.Filesystem.Path;
 
 namespace MFTECmd;
 
-public class Program
+internal class Program
 {
     private static Logger _logger;
 
@@ -220,7 +220,6 @@ public class Program
             }
         }
 
-
         _logger.Info(Header);
         _logger.Info("");
         _logger.Info($"Command line: {string.Join(" ", _args)}\r\n");
@@ -228,6 +227,15 @@ public class Program
         if (IsAdministrator() == false)
         {
             _logger.Fatal("Warning: Administrator privileges not found!\r\n");
+        }
+        
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            if (vss)
+            {
+                _logger.Error($"--vss is only supported on Windows. Disabling\r\n");
+                vss = false;
+            }
         }
 
         if (debug)
@@ -279,7 +287,6 @@ public class Program
                 return;
             }
         }
-
 
         switch (ft)
         {
@@ -346,7 +353,7 @@ public class Program
                 ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de);
                 break;
             case FileType.LogFile:
-                _logger.Warn("$LogFile not supported yet. Exiting");
+                _logger.Warn("$LogFile not supported...yet. Exiting");
                 return;
             case FileType.UsnJournal:
                 if (csv.IsNullOrEmpty() && json.IsNullOrEmpty()
@@ -1791,11 +1798,11 @@ public class Program
                 {
                     var seg0 = segs[0].Replace("0x", "");
 
-                    entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
+                    int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
                 }
                 else
                 {
-                    entryOk = int.TryParse(segs[0], out entry);
+                    int.TryParse(segs[0], out entry);
                 }
                 //try to find correct one
 
@@ -1933,11 +1940,9 @@ public class Program
         {
             try
             {
-                using (var br = new BinaryReader(new FileStream(file, FileMode.Open, FileAccess.Read)))
-                {
-                    buff = br.ReadBytes(50);
-                    _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
-                }
+                using var br = new BinaryReader(new FileStream(file, FileMode.Open, FileAccess.Read));
+                buff = br.ReadBytes(50);
+                _logger.Trace($"Raw bytes: {BitConverter.ToString(buff)}");
             }
             catch (Exception)
             {
@@ -1945,6 +1950,12 @@ public class Program
 
                 try
                 {
+                    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        _logger.Error($"Raw disk reads not supported on non-Windows platforms. Exiting");
+                        Environment.Exit(0);
+                    }
+                    
                     var rawFiles = Helper.GetFiles(ll);
 
                     rawFiles.First().FileStream.Read(buff, 0, 50);
