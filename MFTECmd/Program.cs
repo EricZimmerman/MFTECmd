@@ -182,6 +182,8 @@ public class Program
         _rootCommand.Handler = CommandHandler.Create(DoWork);
 
         await _rootCommand.InvokeAsync(args);
+        
+        Log.CloseAndFlush();
     }
 
     private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool vss, bool dedupe, bool debug, bool trace)
