@@ -54,9 +54,6 @@ public class Program
                                             "\r\n\t" +
                                             "    Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes";
 
-
-    private static string[] _args;
-
     private static CsvWriter _bodyWriter;
     private static CsvWriter _csvWriter;
     private static CsvWriter _fileListWriter;
@@ -70,7 +67,6 @@ public class Program
     {
         ExceptionlessClient.Default.Startup("88KHFwswzxfnYGejAlsVDao47ySGliI6vFbQPt9C");
 
-        _args = args;
 
         _rootCommand = new RootCommand
         {
