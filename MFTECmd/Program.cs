@@ -2059,43 +2059,46 @@ public class Program
             void DumpAttributeInfo(Attribute item, string description)
             {
                 Log.Information("**** {Type} ****",description);
-
+                
+                Log.Information("  Attribute #: {AttrNumber}, Size: {Size}, Content size: {ContentSize}, Name size: {NameSize}, ContentOffset {ContentOffset}. Resident: {Resident}", $"0x{item.AttributeNumber:X}",
+                    $"0x{item.AttributeSize:X}", $"0x{item.AttributeContentLength:X}", $"0x{item.NameSize:X}", $"0x{item.ContentOffset:X}", item.IsResident);
+                
                 if (item.AttributeDataFlag > 0)
                 {
-                    Log.Information("Attribute #: {AttrNumber}, Size: {Size}, Attribute flags: {AttributeFlags}, Content size: {ContentSize}, Name size: {NameSize}, ContentOffset {ContentOffset}. Resident: {Resident}", $"0x{item.AttributeNumber:X}",
-                        $"0x{item.AttributeSize:X}", item.AttributeDataFlag, $"0x{item.AttributeContentLength:X}", $"0x{item.NameSize:X}", $"0x{item.ContentOffset:X}", item.IsResident);
-                    return;
+                    Log.Information("  Attribute flags: {AttributeFlags}", item.AttributeDataFlag);
                 }
                 
-                Log.Information("Attribute #: {AttrNumber}, Size: {Size}, Content size: {ContentSize}, Name size: {NameSize}, ContentOffset {ContentOffset}. Resident: {Resident}", $"0x{item.AttributeNumber:X}",
-                    $"0x{item.AttributeSize:X}", $"0x{item.AttributeContentLength:X}", $"0x{item.NameSize:X}", $"0x{item.ContentOffset:X}", item.IsResident);
+                if (item.Name.IsNullOrEmpty() == false)
+                {
+                    Log.Information("  Name: {Name}", item.Name);
+                }
             }
 
             void DumpResidentData(ResidentData residentData)
             {
-                Log.Information("Resident Data");
+                Log.Information("  Resident Data");
                 Console.WriteLine();
                 var asAscii = Encoding.ASCII.GetString(residentData.Data);
                 var asUnicode = Encoding.Unicode.GetString(residentData.Data);
-                Log.Information("Data: {Data}",BitConverter.ToString(residentData.Data));
+                Log.Information("  Data: {Data}",BitConverter.ToString(residentData.Data));
                 Console.WriteLine();
-                Log.Information("  ASCII:   {Data}",asAscii);
-                Log.Information("  UNICODE: {Data}",asUnicode);
+                Log.Information("    ASCII:   {Data}",asAscii);
+                Log.Information("    UNICODE: {Data}",asUnicode);
             }
 
             void DumpNonResidentData(NonResidentData nonResidentData)
             {
-                Log.Information("Non-Resident Data");
+                Log.Information("  Non-Resident Data");
                 Log.Information(
-                    "Starting Virtual Cluster #: {StartingVirtualClusterNumber}, Ending Virtual Cluster #: {EndingVirtualClusterNumber}, Allocated Size: {AllocatedSize}, Actual Size: {ActualSize}, Initialized Size: {InitializedSize} "
+                    "  Starting Virtual Cluster #: {StartingVirtualClusterNumber}, Ending Virtual Cluster #: {EndingVirtualClusterNumber}, Allocated Size: {AllocatedSize}, Actual Size: {ActualSize}, Initialized Size: {InitializedSize} "
                     ,$"0x{nonResidentData.StartingVirtualClusterNumber:X}",$"0x{nonResidentData.EndingVirtualClusterNumber:X}",$"0x{nonResidentData.AllocatedSize:X}", $"0x{nonResidentData.ActualSize:X}",$"0x{nonResidentData.InitializedSize:X}");
 
-                Log.Information("DataRuns Entries");
                 Console.WriteLine();
+                Log.Information("  DataRuns Entries (Cluster offset -> # of clusters)");
                             
                 foreach (var dataRun in nonResidentData.DataRuns)
                 {
-                    Log.Information("Cluster offset: {Offset}, # Clusters: {Clusters}",$"0x{dataRun.ClusterOffset:X}",$"0x{dataRun.ClustersInRun:X}");
+                    Log.Information("  {Offset} ->      {Clusters}",$"0x{dataRun.ClusterOffset:X}".PadRight(32),$"0x{dataRun.ClustersInRun:X}");
                 }
             }
             
@@ -2108,14 +2111,14 @@ public class Program
                     case StandardInfo item:
                         DumpAttributeInfo(item,"STANDARD INFO");
 
-                        Log.Information("Flags: {Flags}, Max Version: {MaxVersion}, Flags 2: {Flags2}, Class Id: {ClassId}, Owner Id: {OwnerId}, Security Id: {SecurityId}, Quota charged: {Quota}, Update sequence #: {Usn}"
+                        Log.Information("  Flags: {Flags}, Max Version: {MaxVersion}, Flags 2: {Flags2}, Class Id: {ClassId}, Owner Id: {OwnerId}, Security Id: {SecurityId}, Quota charged: {Quota}, Update sequence #: {Usn}"
                             ,item.Flags,$"0x{item.MaxVersion:X}",item.Flags2,$"0x{item.ClassId:X}",$"0x{item.OwnerId:X}",$"0x{item.SecurityId:X}",$"0x{item.QuotaCharged:X}",$"0x{item.UpdateSequenceNumber:X}");
                         Console.WriteLine();
                         
-                        Log.Information("Created On:         {Date}", item.CreatedOn);
-                        Log.Information("Modified On:        {Date}", item.ContentModifiedOn);
-                        Log.Information("Record Modified On: {Date}", item.RecordModifiedOn);
-                        Log.Information("Last Accessed On:   {Date}", item.LastAccessedOn);
+                        Log.Information("  Created On:         {Date}", item.CreatedOn);
+                        Log.Information("  Modified On:        {Date}", item.ContentModifiedOn);
+                        Log.Information("  Record Modified On: {Date}", item.RecordModifiedOn);
+                        Log.Information("  Last Accessed On:   {Date}", item.LastAccessedOn);
                         
                         Console.WriteLine();
                         
@@ -2126,17 +2129,17 @@ public class Program
                         
                         Console.WriteLine();
                         
-                        Log.Information("File name: {Thing}",item.FileInfo.FileName);
-                        Log.Information("Flags: {Flags}, Name Type: {NameType}, Reparse Value: {Reparse}, Physical Size: {Physical}, Logical Size: {Logical}"
+                        Log.Information("  File name: {Thing}",item.FileInfo.FileName);
+                        Log.Information("  Flags: {Flags}, Name Type: {NameType}, Reparse Value: {Reparse}, Physical Size: {Physical}, Logical Size: {Logical}"
                             ,item.FileInfo.Flags,item.FileInfo.NameType,$"0x{item.FileInfo.ReparseValue:X}",$"0x{item.FileInfo.PhysicalSize:X}",$"0x{item.FileInfo.LogicalSize:X}");
-                        Log.Information("Parent Entry-seq #: {Entry}-{Seq}",$"0x{item.FileInfo.ParentMftRecord.MftEntryNumber:X}",$"0x{item.FileInfo.ParentMftRecord.MftSequenceNumber:X}");
+                        Log.Information("  Parent Entry-seq #: {Entry}-{Seq}",$"0x{item.FileInfo.ParentMftRecord.MftEntryNumber:X}",$"0x{item.FileInfo.ParentMftRecord.MftSequenceNumber:X}");
                         
                         Console.WriteLine();
                         
-                        Log.Information("Created On:         {Date}", item.FileInfo.CreatedOn);
-                        Log.Information("Modified On:        {Date}", item.FileInfo.ContentModifiedOn);
-                        Log.Information("Record Modified On: {Date}", item.FileInfo.RecordModifiedOn);
-                        Log.Information("Last Accessed On:   {Date}", item.FileInfo.LastAccessedOn);
+                        Log.Information("  Created On:         {Date}", item.FileInfo.CreatedOn);
+                        Log.Information("  Modified On:        {Date}", item.FileInfo.ContentModifiedOn);
+                        Log.Information("  Record Modified On: {Date}", item.FileInfo.RecordModifiedOn);
+                        Log.Information("  Last Accessed On:   {Date}", item.FileInfo.LastAccessedOn);
                         
                         Console.WriteLine();
                         break;
@@ -2170,22 +2173,22 @@ public class Program
                         DumpAttributeInfo(item,"INDEX ROOT");
                         Console.WriteLine();
 
-                        Log.Information("Indexed Attribute Type: {IndexedAttributeType} Entry Size: {EntrySize} Number Cluster Blocks: {NumberClusterBlocks} Collation Type: {CollationType} Index entries count: {IndexEntriesCount} Entry-seq #: {Entry}-{Seq}",
+                        Log.Information("  Indexed Attribute Type: {IndexedAttributeType} Entry Size: {EntrySize} Number Cluster Blocks: {NumberClusterBlocks} Collation Type: {CollationType} Index entries count: {IndexEntriesCount} Entry-seq #: {Entry}-{Seq}",
                             item.IndexedAttributeType,$"0x{item.EntrySize:X}",$"0x{item.NumberClusterBlocks:X}",item.CollationType,$"0x{item.IndexEntries.Count:X}",$"0x{item.MftRecord.MftEntryNumber:X}",$"0x{item.MftRecord.MftSequenceNumber:X}");
                         
-                        Log.Information("FileInfo Records Entries");
+                        Log.Information("  FileInfo Records Entries");
                         foreach (var itemIndex in item.IndexEntries)
                         {
-                            Log.Information("File name: {Thing}",itemIndex.FileName);
-                            Log.Information("Flags: {Flags}, Name Type: {NameType}, Reparse Value: {Reparse}, Physical Size: {Physical}, Logical Size: {Logical}",itemIndex.Flags,itemIndex.NameType,$"0x{itemIndex.ReparseValue:X}",$"0x{itemIndex.PhysicalSize:X}",$"0x{itemIndex.LogicalSize:X}");
-                            Log.Information("Parent Entry-seq #: {Entry}-{Seq}",$"0x{item.MftRecord.MftEntryNumber:X}",$"0x{item.MftRecord.MftSequenceNumber:X}");
+                            Log.Information("  File name: {Thing}",itemIndex.FileName);
+                            Log.Information("  Flags: {Flags}, Name Type: {NameType}, Reparse Value: {Reparse}, Physical Size: {Physical}, Logical Size: {Logical}",itemIndex.Flags,itemIndex.NameType,$"0x{itemIndex.ReparseValue:X}",$"0x{itemIndex.PhysicalSize:X}",$"0x{itemIndex.LogicalSize:X}");
+                            Log.Information("  Parent Entry-seq #: {Entry}-{Seq}",$"0x{item.MftRecord.MftEntryNumber:X}",$"0x{item.MftRecord.MftSequenceNumber:X}");
                         
                             Console.WriteLine();
                         
-                            Log.Information("Created On:         {Date}", itemIndex.CreatedOn);
-                            Log.Information("Modified On:        {Date}", itemIndex.ContentModifiedOn);
-                            Log.Information("Record Modified On: {Date}", itemIndex.RecordModifiedOn);
-                            Log.Information("Last Accessed On:   {Date}", itemIndex.LastAccessedOn);
+                            Log.Information("  Created On:         {Date}", itemIndex.CreatedOn);
+                            Log.Information("  Modified On:        {Date}", itemIndex.ContentModifiedOn);
+                            Log.Information("  Record Modified On: {Date}", itemIndex.RecordModifiedOn);
+                            Log.Information("  Last Accessed On:   {Date}", itemIndex.LastAccessedOn);
                         
                             Console.WriteLine();
                         }
@@ -2207,7 +2210,6 @@ public class Program
                         if (item.ResidentData == null)
                         {
                             DumpNonResidentData(item.NonResidentData);
-
                         }
                         else
                         {
@@ -2262,24 +2264,24 @@ public class Program
                         var birthVolumeIdMacAddress = Regex.Replace(tempMac, ".{2}", "$0:").TrimEnd(':');
                         var birthVolumeIdCreatedOn = GetDateTimeOffsetFromGuid(item.BirthObjectId);
                         
-                        Log.Information("Object Id:            {ObjectId}",item.ObjectId);
-                        Log.Information("  Object Id MAC:        {MacAddress}",objectIdMacAddress);
+                        Log.Information("  Object Id:            {ObjectId}",item.ObjectId);
+                        Log.Information("    Object Id MAC:        {MacAddress}",objectIdMacAddress);
                         if (objectIdCreatedOn.Year < 3000)
                         {
-                            Log.Information("  Object Id Created On: {CreatedOn}",objectIdCreatedOn);    
+                            Log.Information("    Object Id Created On: {CreatedOn}",objectIdCreatedOn);    
                         }
                         
                         Console.WriteLine();
-                        Log.Information("Birth Volume Id:      {BirthVolumeId}",item.BirthVolumeId);
+                        Log.Information("  Birth Volume Id:      {BirthVolumeId}",item.BirthVolumeId);
                         if (item.BirthObjectId.ToString() != "00000000-0000-0000-0000-000000000000")
                         {
-                            Log.Information("  Birth Volume Id MAC:      {MacAddress}",birthVolumeIdMacAddress);
-                            Log.Information("Birth Volume Id Created On: {CreatedOn}",birthVolumeIdCreatedOn);
+                            Log.Information("    Birth Volume Id MAC:      {MacAddress}",birthVolumeIdMacAddress);
+                            Log.Information("  Birth Volume Id Created On: {CreatedOn}",birthVolumeIdCreatedOn);
                         }
                         
                         Console.WriteLine();
-                        Log.Information("Birth Object Id:      {BirthObjectId}",item.BirthObjectId);
-                        Log.Information("Domain Id:            {Domain}",item.DomainId);
+                        Log.Information("  Birth Object Id:      {BirthObjectId}",item.BirthObjectId);
+                        Log.Information("  Domain Id:            {Domain}",item.DomainId);
                         
                         Console.WriteLine();
                         break;
@@ -2291,17 +2293,17 @@ public class Program
                         var asAscii = Encoding.ASCII.GetString(item.Content);
                         var asUnicode = Encoding.Unicode.GetString(item.Content);
 
-                        Log.Information("Extended Attribute: {Content}",BitConverter.ToString(item.Content));
-                        Log.Information("ASCII: {Ascii}",asAscii);
-                        Log.Information("Unicode: {Unicode}",asUnicode);
+                        Log.Information("  Extended Attribute: {Content}",BitConverter.ToString(item.Content));
+                        Log.Information("  ASCII: {Ascii}",asAscii);
+                        Log.Information("  Unicode: {Unicode}",asUnicode);
 
                         if (item.SubItems.Count > 0)
                         {
-                            Log.Information("Sub items");
+                            Log.Information("  Sub items");
                         }
                         foreach (IEa itemSubItem in item.SubItems)
                         {
-                            Log.Information("Name: {Name}", itemSubItem.InternalName);
+                            Log.Information("  Name: {Name}", itemSubItem.InternalName);
                             
                             // need to find working data to get this all done right
                             
@@ -2310,21 +2312,21 @@ public class Program
                                 case "$LXUID":
                                 case "$LXGID":
                                 case "$LXMOD":
-                                    Log.Information("Name: {Name}",(itemSubItem as LxXXX).Name);
+                                    Log.Information("  Name: {Name}",(itemSubItem as LxXXX).Name);
                                     
                                     break;
                                 case ".LONGNAME":
-                                    Log.Information(".LONGNAME: {Name}",(itemSubItem as LongName).Name);
+                                    Log.Information("  .LONGNAME: {Name}",(itemSubItem as LongName).Name);
                                     break;
                                 case "LXATTRB":
 
                                     var lxa = itemSubItem as Lxattrb;
                                     
-                                    Log.Information("Format: {Format}",$"0x{lxa.Format:X}");
-                                    Log.Information("Version: {Version}",$"0x{lxa.Version:X}");
-                                    Log.Information("Mode: {Mode}",$"0x{lxa.Mode:X}");
-                                    Log.Information("Uid/Gid: {U}/G}",$"0x{lxa.Uid:X}",$"0x{lxa.Gid:X}");
-                                    Log.Information("DeviceId: {DeviceId}",$"0x{lxa.DeviceId:X}");
+                                    Log.Information("  Format: {Format}",$"0x{lxa.Format:X}");
+                                    Log.Information("  Version: {Version}",$"0x{lxa.Version:X}");
+                                    Log.Information("  Mode: {Mode}",$"0x{lxa.Mode:X}");
+                                    Log.Information("  Uid/Gid: {U}/G}",$"0x{lxa.Uid:X}",$"0x{lxa.Gid:X}");
+                                    Log.Information("  DeviceId: {DeviceId}",$"0x{lxa.DeviceId:X}");
                                     
                                     //convert to seconds so we can use it later.
                                     //.net has no API for adding nanoseconds that works, so this is what we get
@@ -2334,36 +2336,36 @@ public class Program
 
                                     var subSec = lastAccessSubSec.Length > 2 ? lastAccessSubSec.Substring(2) : "0000000";
                                     
-                                    Log.Information("Last Access Time: {Time}.{Sub}",lxa.LastAccessTime.ToUniversalTime(),subSec);
-                                    Log.Information("Modified Time: {Time}.{Sub}",lxa.ModifiedTime,modifiedSubsec);
-                                    Log.Information("Inode Time: {Time}.{Sub}",lxa.ModifiedTime,inodeChangeSubsec);
+                                    Log.Information("  Last Access Time: {Time}.{Sub}",lxa.LastAccessTime.ToUniversalTime(),subSec);
+                                    Log.Information("  Modified Time: {Time}.{Sub}",lxa.ModifiedTime,modifiedSubsec);
+                                    Log.Information("  Inode Time: {Time}.{Sub}",lxa.ModifiedTime,inodeChangeSubsec);
                                     
                                     break;
                                 case "LXXATTR":
                                     var lxx = itemSubItem as Lxattrr;
                                     foreach (var keyValue in lxx.KeyValues)
                                     {
-                                        Log.Information("Key: {Key} --> {Value}", keyValue.Key, keyValue.Value);
+                                        Log.Information("  Key: {Key} --> {Value}", keyValue.Key, keyValue.Value);
                                     }
                                     
                                     break;
                                 case "$KERNEL.PURGE.ESBCACHE":
                                     var kpe = itemSubItem as PurgeEsbCache;
-                                    Log.Information("$KERNEL.PURGE.ESBCACHE | Timestamp: {Timestamp} Timestamp2: {Timestamp2}",kpe.Timestamp,kpe.Timestamp2);
+                                    Log.Information("  $KERNEL.PURGE.ESBCACHE | Timestamp: {Timestamp} Timestamp2: {Timestamp2}",kpe.Timestamp,kpe.Timestamp2);
                                     break;
                                 case "$CI.CATALOGHINT":
                                     var ch = itemSubItem as CatHint;
-                                    Log.Information("$CI.CATALOGHINT | Hint: {Hint}",ch.Hint);
+                                    Log.Information("  $CI.CATALOGHINT | Hint: {Hint}",ch.Hint);
                                     
                                     break;
                                 case "$KERNEL.PURGE.APPFIXCACHE":
 
                                     var af = itemSubItem as AppFixCache;
                                     
-                                    Log.Information("$KERNEL.PURGE.APPFIXCACHE | Timestamp: {Timestamp} Remaining bytes: {RemainingBytes}",af.Timestamp,BitConverter.ToString(af.RemainingBytes));
+                                    Log.Information("  $KERNEL.PURGE.APPFIXCACHE | Timestamp: {Timestamp} Remaining bytes: {RemainingBytes}",af.Timestamp,BitConverter.ToString(af.RemainingBytes));
                                     break;
                                 case ".CLASSINFO":
-                                    Log.Information(".ClassInfo: Not decoded");
+                                    Log.Information("  .ClassInfo: Not decoded");
                                     break;
                                 
                                 default:
@@ -2379,7 +2381,7 @@ public class Program
                         DumpAttributeInfo(item,"EXTENDED ATTRIBUTE INFORMATION");
                         Console.WriteLine();
                         
-                        Log.Information("Ea Size: {EaSize:X}, Number Of Extended Attributes With Need Ea Set: {NumberOfExtendedAttrWithNeedEaSet:X} Size Of Ea Data: {SizeOfEaData:X} ", $"0x{item.EaSize:X}",$"0x{item.NumberOfExtendedAttrWithNeedEaSet:X}",$"0x{item.SizeOfEaData:X}");
+                        Log.Information("  Ea Size: {EaSize}, Number Of Extended Attributes With Need Ea Set: {NumberOfExtendedAttrWithNeedEaSet} Size Of Ea Data: {SizeOfEaData} ", $"0x{item.EaSize:X}",$"0x{item.NumberOfExtendedAttrWithNeedEaSet:X}",$"0x{item.SizeOfEaData:X}");
                         
                         Console.WriteLine();
                         break;
@@ -2388,7 +2390,7 @@ public class Program
                         DumpAttributeInfo(item,"REPARSE POINT");
                         Console.WriteLine();
                         
-                        Log.Information("Substitute Name: {SubstituteName} Print Name: {PrintName} Tag: {Tag}",item.SubstituteName,item.PrintName,item.Tag);
+                        Log.Information("  Substitute Name: {SubstituteName} Print Name: {PrintName} Tag: {Tag}",item.SubstituteName,item.PrintName,item.Tag);
                         
                         Console.WriteLine();
                         break;
@@ -2397,7 +2399,7 @@ public class Program
                         DumpAttributeInfo(item,"VOLUME INFORMATION");
                         Console.WriteLine();
                         
-                        Log.Information("Volume Flags: {Flags} Major Version: {MajorVersion} Minor Version: {MinorVersion} Unknown Bytes: {Bytes} ",item.VolumeFlags,$"0x{item.MajorVersion:X}",$"0x{item.MinorVersion:X}",BitConverter.ToString(item.UnknownBytes));
+                        Log.Information("  Volume Flags: {Flags} Major Version: {MajorVersion} Minor Version: {MinorVersion} Unknown Bytes: {Bytes} ",item.VolumeFlags,$"0x{item.MajorVersion:X}",$"0x{item.MinorVersion:X}",BitConverter.ToString(item.UnknownBytes));
                         
                         Console.WriteLine();
                         
@@ -2407,10 +2409,15 @@ public class Program
                         DumpAttributeInfo(item,"VOLUME NAME");
                         Console.WriteLine();
                         
-                        Log.Information("Volume Name: {Name}",item.VolName);
+                        Log.Information("  Volume Name: {Name}",item.VolName);
                         
                         Console.WriteLine();
                         break;
+                    
+                    case AttributeList item:
+                        //BOOOOOORING
+                        break;
+                    
                     default:
                         Log.Information("{Attrib}",frAttribute);
                         throw new Exception($"You should report this to saericzimmerman@gmail.com! Attribute Type not supported yet: {frAttribute.GetType()}");
@@ -2546,7 +2553,7 @@ public class Program
         foreach (var fr in records)
         {
             Log.Verbose(
-                "Dumping record with entry: {EntryNumber:X} at offset {Offset}",$"0x{fr.Value.EntryNumber:X}",$"0x{fr.Value.SequenceNumber:X}");
+                "Dumping record with entry: {EntryNumber} at offset {Offset}",$"0x{fr.Value.EntryNumber:X}",$"0x{fr.Value.SequenceNumber:X}");
 
             if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
                 fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
