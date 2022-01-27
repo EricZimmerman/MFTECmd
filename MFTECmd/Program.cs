@@ -2039,10 +2039,6 @@ public class Program
             Log.Information("Dumping details for file record with key '{Key}'",key);
             Console.WriteLine();
             
-            //old
-            //Log.Information("{Fr}",fr);
-            //end old
-            
             var fa0 = fr.FixupData.FixupActual[0].ToArray();
             var fa1 = fr.FixupData.FixupActual[1].ToArray();
             var das0 = BitConverter.ToString(fa0);
@@ -2099,6 +2095,42 @@ public class Program
                 foreach (var dataRun in nonResidentData.DataRuns)
                 {
                     Log.Information("  {Offset} ->      {Clusters}",$"0x{dataRun.ClusterOffset:X}".PadRight(32),$"0x{dataRun.ClustersInRun:X}");
+                }
+            }
+
+            void DumpAcl(XAclRecord acl)
+            {
+                Log.Information("    ACL Revision:   {Revision}",$"0x{acl.AclRevision:X}");
+                Log.Information("    ACL Size:       {Size}",$"0x{acl.AclSize:X}");
+                Log.Information("    ACL Type:       {Type}",acl.AclType);
+                Log.Information("    Sbz1:           {Sbz}",$"0x{acl.Sbz1:X}");
+                Log.Information("    Sbz2:           {Sbz}",$"0x{acl.Sbz2:X}");
+
+                Console.WriteLine();
+                Log.Information("    ACE Records Count: {AceCount}",acl.AceCount);
+
+                Console.WriteLine();
+
+                var i = 0;
+                foreach (var aceRecord in acl.AceRecords)
+                {
+                    Log.Information("    ------------ Ace record #{I} ------------",i);
+                    
+                    Log.Information("    ACE Size:  {Size}",$"0x{aceRecord.AceSize:X}");
+
+                    Log.Information("    ACE Type:  {AceType}",aceRecord.AceType);
+
+                    Log.Information("    ACE Flags: {AceFlags}",aceRecord.AceFlags);
+
+                    Log.Information("    Mask:      {Mask}",aceRecord.Mask);
+
+                    Log.Information("    SID:       {Sid}",aceRecord.Sid);
+                    Log.Information("    SID Type:  {SidType}",aceRecord.SidType);
+
+                    Log.Information("    SID Type Description: {Desc}",Helpers.GetDescriptionFromEnumValue(aceRecord.SidType));
+                    i += 1;
+                    Console.WriteLine();
+                    
                 }
             }
             
@@ -2161,11 +2193,55 @@ public class Program
                         break;
 
                     case SecurityDescriptor item:
-                        DumpAttributeInfo(item,"SECURITY DESCRIPTOR");
+                        DumpAttributeInfo(item, "SECURITY DESCRIPTOR");
+                        Console.WriteLine();
+
+                        if (item.SecurityInfo == null)
+                        {
+                            continue;
+                        }
+
+                        Log.Information("  Security Information");
+                        Log.Information("    Revision: {Item}", $"0x{item.SecurityInfo.Revision:X}");
+                        Log.Information("    Control:  {Item}",item.SecurityInfo.Control);
+                        
                         Console.WriteLine();
                         
+                        Log.Information("    Owner Offset:   {Item}", $"0x{item.SecurityInfo.OwnerOffset:X}");
+                        Log.Information("    Owner SID:      {Item}",item.SecurityInfo.OwnerSid);
+                        Log.Information("    Owner SID Type: {Item}",item.SecurityInfo.OwnerSidType);
                         
-                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        
+                        Log.Information("    Group Offset:   {Item}", $"0x{item.SecurityInfo.GroupOffset:X}");
+                        Log.Information("    Group SID:      {Item}",item.SecurityInfo.GroupSid);
+                        Log.Information("    Group SID Type: {Item}",item.SecurityInfo.GroupSidType);
+
+                        if (item.SecurityInfo.Dacl != null)
+                        {
+                            Console.WriteLine();
+                            Log.Information("    Dacl Offset:    {Item}", $"0x{item.SecurityInfo.DaclOffset:X}");
+                            DumpAcl(item.SecurityInfo.Dacl);
+                        }
+                        
+                        if (item.SecurityInfo.Sacl != null)
+                        {
+                            Console.WriteLine();
+                            Log.Information("    Sacl Offset:    {Item}", $"0x{item.SecurityInfo.SaclOffset:X}");
+                            DumpAcl(item.SecurityInfo.Sacl);
+                        }
+                        
+                        Console.WriteLine();
+                        
+                        if (item.ResidentData == null)
+                        {
+                            DumpNonResidentData(item.NonResidentData);
+                        }
+                        else
+                        {
+                            DumpResidentData(item.ResidentData);
+                        }
+               
                         Console.WriteLine();
                         break;
 
