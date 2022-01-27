@@ -2293,13 +2293,21 @@ public class Program
                         Console.WriteLine();
                         break;
                     
+                    case ExtendedAttributeInformation item:
+                        DumpAttributeInfo(item,"EXTENDED ATTRIBUTE INFORMATION");
+                        Console.WriteLine();
+                        
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+                    
                     case ReparsePoint item:
                         DumpAttributeInfo(item,"REPARSE POINT");
                         Console.WriteLine();
                         
                         Log.Information("Substitute Name: {SubstituteName} Print Name: {PrintName} Tag: {Tag}",item.SubstituteName,item.PrintName,item.Tag);
                         
-                        Log.Information("{Item}",item);
                         Console.WriteLine();
                         break;
                     
@@ -2468,6 +2476,16 @@ public class Program
                 //will get this record via extension records, which were already handled in MFT.dll code
                 continue;
             }
+            
+            
+            foreach (var valueAttribute in fr.Value.Attributes)
+            {
+                if (valueAttribute is not LoggedUtilityStream && valueAttribute is not ReparsePoint && valueAttribute is not LoggedUtilityStream &&  valueAttribute is not VolumeInformation && valueAttribute is not VolumeName && valueAttribute is not StandardInfo && valueAttribute is not Data && valueAttribute is not FileName && valueAttribute is not IndexRoot && valueAttribute is not IndexAllocation && valueAttribute is not Bitmap && valueAttribute is not ObjectId_  && valueAttribute.GetType().Name != "AttributeList")
+                {
+                    Log.Information("E/S: {E}-{S}: {A}",fr.Value.EntryNumber,fr.Value.SequenceNumber,valueAttribute.GetType());
+                }
+                
+            }
 
             foreach (var attribute in fr.Value.Attributes.Where(t =>
                          t.AttributeType == AttributeType.FileName).OrderBy(t => ((FileName)t).FileInfo.NameType))
@@ -2490,7 +2508,6 @@ public class Program
                 _mftOutRecords?.Add(mftr);
 
                 _csvWriter?.NextRecord();
-
 
                 if (_fileListWriter != null)
                 {
