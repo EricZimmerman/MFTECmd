@@ -983,7 +983,7 @@ public class Program
         catch (Exception e)
         {
             Log.Error(e,
-                "There was an error processing $J data! Last offset processed: 0x{LastOffset:X}. Error: {Message}",Usn.Usn.LastOffset,e.Message);
+                "There was an error processing $J data! Last offset processed: {LastOffset}. Error: {Message}",$"0x{Usn.Usn.LastOffset:X}",e.Message);
         }
     }
 
@@ -1235,7 +1235,7 @@ public class Program
 
                     Console.WriteLine();
                     Log.Information("Details for security record # {Id1} (0x{Id:X}), Found in '{Key}'",sd.Id,sd.Id,sds1.Key);
-                    Log.Information("Hash value: {Hash}, Offset: 0x{Offset:X}",sd.Hash,sd.Offset);
+                    Log.Information("Hash value: {Hash}, Offset: {Offset}",sd.Hash,$"0x{sd.Offset:X}");
                     Log.Information("Control flags: {Flags}",sd.SecurityDescriptor.Control.ToString().Replace(", ", " | "));
                     Console.WriteLine();
 
@@ -1817,7 +1817,7 @@ public class Program
 
                 File.WriteAllBytes(outFull, fileBytes);
 
-                Log.Information("FILE record at offset 0x{Offset:X} dumped to '{OutFull}'",offset,outFull);
+                Log.Information("FILE record at offset {Offset} dumped to '{OutFull}'",$"$0x{offset:X}",outFull);
                 Console.WriteLine();
             }
             else
@@ -2288,8 +2288,90 @@ public class Program
                         DumpAttributeInfo(item,"EXTENDED ATTRIBUTE");
                         Console.WriteLine();
                         
+                        var asAscii = Encoding.ASCII.GetString(item.Content);
+                        var asUnicode = Encoding.Unicode.GetString(item.Content);
+
+                        Log.Information("Extended Attribute: {Content}",BitConverter.ToString(item.Content));
+                        Log.Information("ASCII: {Ascii}",asAscii);
+                        Log.Information("Unicode: {Unicode}",asUnicode);
+
+                        if (item.SubItems.Count > 0)
+                        {
+                            Log.Information("Sub items");
+                        }
+                        foreach (IEa itemSubItem in item.SubItems)
+                        {
+                            Log.Information("Name: {Name}", itemSubItem.InternalName);
+                            
+                            // need to find working data to get this all done right
+                            
+                            switch (itemSubItem.InternalName)
+                            { 
+                                case "$LXUID":
+                                case "$LXGID":
+                                case "$LXMOD":
+                                    Log.Information("Name: {Name}",(itemSubItem as LxXXX).Name);
+                                    
+                                    break;
+                                case ".LONGNAME":
+                                    Log.Information(".LONGNAME: {Name}",(itemSubItem as LongName).Name);
+                                    break;
+                                case "LXATTRB":
+
+                                    var lxa = itemSubItem as Lxattrb;
+                                    
+                                    Log.Information("Format: {Format}",$"0x{lxa.Format:X}");
+                                    Log.Information("Version: {Version}",$"0x{lxa.Version:X}");
+                                    Log.Information("Mode: {Mode}",$"0x{lxa.Mode:X}");
+                                    Log.Information("Uid/Gid: {U}/G}",$"0x{lxa.Uid:X}",$"0x{lxa.Gid:X}");
+                                    Log.Information("DeviceId: {DeviceId}",$"0x{lxa.DeviceId:X}");
+                                    
+                                    //convert to seconds so we can use it later.
+                                    //.net has no API for adding nanoseconds that works, so this is what we get
+                                    var lastAccessSubSec = (lxa.LastAccessNanoSeconds / 1e+9).ToString(CultureInfo.InvariantCulture);
+                                    var modifiedSubsec = (lxa.ModifiedNanoSeconds / 1e+9).ToString(CultureInfo.InvariantCulture);
+                                    var inodeChangeSubsec = (lxa.InodeChangedNanoSeconds / 1e+9).ToString(CultureInfo.InvariantCulture);
+
+                                    var subSec = lastAccessSubSec.Length > 2 ? lastAccessSubSec.Substring(2) : "0000000";
+                                    
+                                    Log.Information("Last Access Time: {Time}.{Sub}",lxa.LastAccessTime.ToUniversalTime(),subSec);
+                                    Log.Information("Modified Time: {Time}.{Sub}",lxa.ModifiedTime,modifiedSubsec);
+                                    Log.Information("Inode Time: {Time}.{Sub}",lxa.ModifiedTime,inodeChangeSubsec);
+                                    
+                                    break;
+                                case "LXXATTR":
+                                    var lxx = itemSubItem as Lxattrr;
+                                    foreach (var keyValue in lxx.KeyValues)
+                                    {
+                                        Log.Information("Key: {Key} --> {Value}", keyValue.Key, keyValue.Value);
+                                    }
+                                    
+                                    break;
+                                case "$KERNEL.PURGE.ESBCACHE":
+                                    var kpe = itemSubItem as PurgeEsbCache;
+                                    Log.Information("$KERNEL.PURGE.ESBCACHE | Timestamp: {Timestamp} Timestamp2: {Timestamp2}",kpe.Timestamp,kpe.Timestamp2);
+                                    break;
+                                case "$CI.CATALOGHINT":
+                                    var ch = itemSubItem as CatHint;
+                                    Log.Information("$CI.CATALOGHINT | Hint: {Hint}",ch.Hint);
+                                    
+                                    break;
+                                case "$KERNEL.PURGE.APPFIXCACHE":
+
+                                    var af = itemSubItem as AppFixCache;
+                                    
+                                    Log.Information("$KERNEL.PURGE.APPFIXCACHE | Timestamp: {Timestamp} Remaining bytes: {RemainingBytes}",af.Timestamp,BitConverter.ToString(af.RemainingBytes));
+                                    break;
+                                case ".CLASSINFO":
+                                    Log.Information(".ClassInfo: Not decoded");
+                                    break;
+                                
+                                default:
+                                    Log.Information("{Si}",itemSubItem);
+                                    throw new Exception($"You should report this to saericzimmerman@gmail.com! Type not supported yet: {itemSubItem.GetType()}");
+                            }
+                        }
                         
-                        Log.Information("{Item}",item);
                         Console.WriteLine();
                         break;
                     
@@ -2297,8 +2379,8 @@ public class Program
                         DumpAttributeInfo(item,"EXTENDED ATTRIBUTE INFORMATION");
                         Console.WriteLine();
                         
+                        Log.Information("Ea Size: {EaSize:X}, Number Of Extended Attributes With Need Ea Set: {NumberOfExtendedAttrWithNeedEaSet:X} Size Of Ea Data: {SizeOfEaData:X} ", $"0x{item.EaSize:X}",$"0x{item.NumberOfExtendedAttrWithNeedEaSet:X}",$"0x{item.SizeOfEaData:X}");
                         
-                        Log.Information("{Item}",item);
                         Console.WriteLine();
                         break;
                     
@@ -2329,11 +2411,9 @@ public class Program
                         
                         Console.WriteLine();
                         break;
-
-                    
                     default:
                         Log.Information("{Attrib}",frAttribute);
-                        throw new Exception($"{frAttribute.GetType()}");
+                        throw new Exception($"You should report this to saericzimmerman@gmail.com! Attribute Type not supported yet: {frAttribute.GetType()}");
                 }
                 
             }
@@ -2397,7 +2477,7 @@ public class Program
             var majorVer = BitConverter.ToInt16(buff, 4);
             var minorVer = BitConverter.ToInt16(buff, 6);
 
-            Log.Debug("Sig32: 0x{Sig32:X}",sig32);
+            Log.Debug("Sig32: {Sig32}",$"0x{sig32:X}");
 
             switch (sig32)
             {
@@ -2466,26 +2546,25 @@ public class Program
         foreach (var fr in records)
         {
             Log.Verbose(
-                "Dumping record with entry: 0x{EntryNumber:X} at offset 0x:{Offset:X}",fr.Value.EntryNumber,fr.Value.Offset);
+                "Dumping record with entry: {EntryNumber:X} at offset {Offset}",$"0x{fr.Value.EntryNumber:X}",$"0x{fr.Value.SequenceNumber:X}");
 
             if (fr.Value.MftRecordToBaseRecord.MftEntryNumber > 0 &&
                 fr.Value.MftRecordToBaseRecord.MftSequenceNumber > 0)
             {
                 Log.Debug(
-                    "Skipping entry # 0x{EntryNumber:X}, seq #: 0x{SequenceNumber:X} since it is an extension record",fr.Value.EntryNumber,fr.Value.SequenceNumber);
+                    "Skipping entry # {EntryNumber}, seq #: {SequenceNumber} since it is an extension record",$"0x{fr.Value.EntryNumber:X}",$"0x{fr.Value.SequenceNumber:X}");
                 //will get this record via extension records, which were already handled in MFT.dll code
                 continue;
             }
             
-            
-            foreach (var valueAttribute in fr.Value.Attributes)
-            {
-                if (valueAttribute is not LoggedUtilityStream && valueAttribute is not ReparsePoint && valueAttribute is not LoggedUtilityStream &&  valueAttribute is not VolumeInformation && valueAttribute is not VolumeName && valueAttribute is not StandardInfo && valueAttribute is not Data && valueAttribute is not FileName && valueAttribute is not IndexRoot && valueAttribute is not IndexAllocation && valueAttribute is not Bitmap && valueAttribute is not ObjectId_  && valueAttribute.GetType().Name != "AttributeList")
-                {
-                    Log.Information("E/S: {E}-{S}: {A}",fr.Value.EntryNumber,fr.Value.SequenceNumber,valueAttribute.GetType());
-                }
-                
-            }
+            //A useful little thing to find attributes we need to decode
+            // foreach (var valueAttribute in fr.Value.Attributes)
+            // {
+            //     if (valueAttribute is not LoggedUtilityStream && valueAttribute is not ReparsePoint && valueAttribute is not LoggedUtilityStream &&  valueAttribute is not VolumeInformation && valueAttribute is not VolumeName && valueAttribute is not StandardInfo && valueAttribute is not Data && valueAttribute is not FileName && valueAttribute is not IndexRoot && valueAttribute is not IndexAllocation && valueAttribute is not Bitmap && valueAttribute is not ObjectId_  && valueAttribute.GetType().Name != "AttributeList")
+            //     {
+            //         Log.Information("E/S: {E}-{S}: {A}",fr.Value.EntryNumber,fr.Value.SequenceNumber,valueAttribute.GetType());
+            //     }
+            // }
 
             foreach (var attribute in fr.Value.Attributes.Where(t =>
                          t.AttributeType == AttributeType.FileName).OrderBy(t => ((FileName)t).FileInfo.NameType))
