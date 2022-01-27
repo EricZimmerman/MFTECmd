@@ -27,6 +27,7 @@ using Serilog.Events;
 using ServiceStack;
 using ServiceStack.Text;
 using Usn;
+using Attribute = MFT.Attributes.Attribute;
 using CsvWriter = CsvHelper.CsvWriter;
 #if !NET6_0
 using Directory = Alphaleonis.Win32.Filesystem.Directory;
@@ -182,10 +183,50 @@ public class Program
         Log.CloseAndFlush();
     }
 
+    private static string ActiveDateTimeFormat;
+    
+    class DateTimeOffsetFormatter : IFormatProvider, ICustomFormatter
+    {
+        private readonly IFormatProvider _innerFormatProvider;
+
+        public DateTimeOffsetFormatter(IFormatProvider innerFormatProvider)
+        {
+            _innerFormatProvider = innerFormatProvider;
+        }
+
+        public object GetFormat(Type formatType)
+        {
+            return formatType == typeof(ICustomFormatter) ? this : _innerFormatProvider.GetFormat(formatType);
+        }
+
+        public string Format(string format, object arg, IFormatProvider formatProvider)
+        {
+            if (arg is DateTimeOffset)
+            {
+                var size = (DateTimeOffset)arg;
+                return size.ToString(ActiveDateTimeFormat);
+            }
+
+            var formattable = arg as IFormattable;
+            if (formattable != null)
+            {
+                return formattable.ToString(format, _innerFormatProvider);
+            }
+
+            return arg.ToString();
+        }
+    }
+    
     private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool vss, bool dedupe, bool debug, bool trace)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
+        ActiveDateTimeFormat = dt;
+        
+        var formatter  =
+            new DateTimeOffsetFormatter(CultureInfo.CurrentCulture);
+
+        
         var template = "{Message:lj}{NewLine}{Exception}";
 
         if (debug)
@@ -201,7 +242,7 @@ public class Program
         }
         
         var conf = new LoggerConfiguration()
-            .WriteTo.Console(outputTemplate: template)
+            .WriteTo.Console(outputTemplate: template,formatProvider: formatter)
             .MinimumLevel.ControlledBy(levelSwitch);
       
         Log.Logger = conf.CreateLogger();
@@ -914,20 +955,18 @@ public class Program
                         {
                             JsConfig.DateHandler = DateHandler.ISO8601;
 
-                            using (var sWrite =
-                                   new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write)))
+                            using var sWrite =
+                                new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write));
+                            if (_jOutRecords != null)
                             {
-                                if (_jOutRecords != null)
+                                foreach (var jOutRecord in _jOutRecords)
                                 {
-                                    foreach (var jOutRecord in _jOutRecords)
-                                    {
-                                        sWrite.WriteLine(jOutRecord.ToJson());
-                                    }
+                                    sWrite.WriteLine(jOutRecord.ToJson());
                                 }
-
-                                sWrite.Flush();
-                                sWrite.Close();
                             }
+
+                            sWrite.Flush();
+                            sWrite.Close();
                         }
                         catch (Exception e)
                         {
@@ -1272,6 +1311,8 @@ public class Program
         }
     }
 
+    
+    
     private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de)
     {
         var mftFiles = new Dictionary<string, Mft>();
@@ -1720,20 +1761,18 @@ public class Program
                 {
                     JsConfig.DateHandler = DateHandler.ISO8601;
 
-                    using (var sWrite =
-                           new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write)))
+                    using var sWrite =
+                        new StreamWriter(new FileStream(outFile, FileMode.OpenOrCreate, FileAccess.Write));
+                    if (_mftOutRecords != null)
                     {
-                        if (_mftOutRecords != null)
+                        foreach (var mftOutRecord in _mftOutRecords)
                         {
-                            foreach (var mftOutRecord in _mftOutRecords)
-                            {
-                                sWrite.WriteLine(mftOutRecord.ToJson());
-                            }
+                            sWrite.WriteLine(mftOutRecord.ToJson());
                         }
-
-                        sWrite.Flush();
-                        sWrite.Close();
                     }
+
+                    sWrite.Flush();
+                    sWrite.Close();
                 }
                 catch (Exception e)
                 {
@@ -1793,159 +1832,335 @@ public class Program
 
         #region DumpEntry
 
-        if (de.IsNullOrEmpty() == false)
+        if (de.IsNullOrEmpty() != false)
         {
-            Console.WriteLine();
+            return;
+        }
+        
+        Console.WriteLine();
 
-            FileRecord fr = null;
+        FileRecord fr = null;
 
-            var segs = de.Split('-');
+        var segs = de.Split('-');
 
-            bool entryOk;
-            bool seqOk;
-            int entry;
-            int seq;
+        bool entryOk;
+        bool seqOk;
+        int entry;
+        int seq;
 
-            var key = string.Empty;
+        var key = string.Empty;
 
-            if (segs.Length == 2)
+        if (segs.Length == 2)
+        {
+            Log.Warning(
+                "Could not parse '{De}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting",de);
+            return;
+        }
+
+        if (segs.Length == 1)
+        {
+            if (de.StartsWith("0x"))
             {
-                Log.Warning(
-                    "Could not parse '{De}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting",de);
-                return;
-            }
+                var seg0 = segs[0].Replace("0x", "");
 
-            if (segs.Length == 1)
-            {
-                if (de.StartsWith("0x"))
-                {
-                    var seg0 = segs[0].Replace("0x", "");
-
-                    entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
-                }
-                else
-                {
-                    entryOk = int.TryParse(segs[0], out entry);
-                }
-                //try to find correct one
-
-                var ff = _mft.FileRecords.Keys.Where(t => t.StartsWith($"{entry:X8}-")).ToList();
-
-                if (ff.Count == 0)
-                {
-                    ff = _mft.FreeFileRecords.Keys.Where(t => t.StartsWith($"{entry:X8}-")).ToList();
-                }
-
-                if (ff.Count == 1)
-                {
-                    key = ff.First();
-                }
-                else if (ff.Count > 1)
-                {
-                    //more than one, dump and return
-                    Console.WriteLine();
-                    Log.Warning(
-                        "More than one FILE record found. Please specify one of the values below and try again!");
-                    Console.WriteLine();
-
-                    foreach (var f in ff)
-                    {
-                        Log.Information("{F}",f);
-                    }
-
-                    Environment.Exit(-1);
-                }
-                else
-                {
-                    Console.WriteLine();
-                    Log.Warning(
-                        "Could not find FILE record with specified Entry #. Use the --csv option and verify");
-                    Console.WriteLine();
-
-                    Environment.Exit(-1);
-                }
-            }
-
-
-            if (key.Length == 0)
-            {
-                if (de.StartsWith("0x"))
-                {
-                    var seg0 = segs[0].Replace("0x", "");
-                    var seg1 = segs[1].Replace("0x", "");
-
-                    entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
-                    seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
-                }
-                else
-                {
-                    entryOk = int.TryParse(segs[0], out entry);
-                    seqOk = int.TryParse(segs[1], out seq);
-                }
-
-                if (entryOk == false || seqOk == false)
-                {
-                    Log.Warning(
-                        "Could not parse '{De}' to valid values. Exiting",de);
-                    return;
-                }
-
-                key = $"{entry:X8}-{seq:X8}";
-            }
-
-
-            if (_mft.FileRecords.ContainsKey(key))
-            {
-                fr = _mft.FileRecords[key];
-            }
-            else if (_mft.FreeFileRecords.ContainsKey(key))
-            {
-                fr = _mft.FreeFileRecords[key];
-            }
-
-            if (fr == null)
-            {
-                Log.Warning(
-                    "Could not find file record with entry/seq '{De}'. Exiting",de);
-                return;
-            }
-
-            if (fr.IsDirectory() && fls)
-            {
-                var dlist = _mft.GetDirectoryContents(key);
-                var fn = fr.Attributes.FirstOrDefault(t => t.AttributeType == AttributeType.FileName) as FileName;
-                var name = key;
-                if (fn != null)
-                {
-                    var pp = _mft.GetFullParentPath(key);
-                    name = $"{pp}";
-                }
-
-                Log.Information("Contents for '{Name}'",name);
-                Console.WriteLine();
-                Log.Information("Key\t\t\tType\t\tName");
-                foreach (var parentMapEntry in dlist)
-                {
-                    if (parentMapEntry.IsDirectory)
-                    {
-                        Log.Information("{Key}\t{Type}\t{FileName}",$"{parentMapEntry.Key,-16}","Directory",parentMapEntry.FileName);
-                    }
-                    else
-                    {
-                        Log.Information("{Key}\t{Type}\t\t{FileName}",$"{parentMapEntry.Key,-16}","File",parentMapEntry.FileName);
-                    }
-                }
-
-                Console.WriteLine();
+                entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
             }
             else
             {
-                Log.Information("Dumping details for file record with key '{Key}'",key);
+                entryOk = int.TryParse(segs[0], out entry);
+            }
+            //try to find correct one
+
+            var ff = _mft.FileRecords.Keys.Where(t => t.StartsWith($"{entry:X8}-")).ToList();
+
+            if (ff.Count == 0)
+            {
+                ff = _mft.FreeFileRecords.Keys.Where(t => t.StartsWith($"{entry:X8}-")).ToList();
+            }
+
+            if (ff.Count == 1)
+            {
+                key = ff.First();
+            }
+            else if (ff.Count > 1)
+            {
+                //more than one, dump and return
                 Console.WriteLine();
-                
-                Log.Information("{Fr}",fr);
+                Log.Warning(
+                    "More than one FILE record found. Please specify one of the values below and try again!");
+                Console.WriteLine();
+
+                foreach (var f in ff)
+                {
+                    Log.Information("{F}",f);
+                }
+
+                Environment.Exit(-1);
+            }
+            else
+            {
+                Console.WriteLine();
+                Log.Warning(
+                    "Could not find FILE record with specified Entry #. Use the --csv option and verify");
+                Console.WriteLine();
+
+                Environment.Exit(-1);
             }
         }
+
+
+        if (key.Length == 0)
+        {
+            if (de.StartsWith("0x"))
+            {
+                var seg0 = segs[0].Replace("0x", "");
+                var seg1 = segs[1].Replace("0x", "");
+
+                entryOk = int.TryParse(seg0, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out entry);
+                seqOk = int.TryParse(seg1, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out seq);
+            }
+            else
+            {
+                entryOk = int.TryParse(segs[0], out entry);
+                seqOk = int.TryParse(segs[1], out seq);
+            }
+
+            if (entryOk == false || seqOk == false)
+            {
+                Log.Warning(
+                    "Could not parse '{De}' to valid values. Exiting",de);
+                return;
+            }
+
+            key = $"{entry:X8}-{seq:X8}";
+        }
+
+
+        if (_mft.FileRecords.ContainsKey(key))
+        {
+            fr = _mft.FileRecords[key];
+        }
+        else if (_mft.FreeFileRecords.ContainsKey(key))
+        {
+            fr = _mft.FreeFileRecords[key];
+        }
+
+        if (fr == null)
+        {
+            Log.Warning(
+                "Could not find file record with entry/seq '{De}'. Exiting",de);
+            return;
+        }
+
+        if (fr.IsDirectory() && fls)
+        {
+            var dlist = _mft.GetDirectoryContents(key);
+            var fn = fr.Attributes.FirstOrDefault(t => t.AttributeType == AttributeType.FileName) as FileName;
+            var name = key;
+            if (fn != null)
+            {
+                var pp = _mft.GetFullParentPath(key);
+                name = $"{pp}";
+            }
+
+            Log.Information("Contents for '{Name}'",name);
+            Console.WriteLine();
+            Log.Information("Key\t\t\tType\t\tName");
+            foreach (var parentMapEntry in dlist)
+            {
+                if (parentMapEntry.IsDirectory)
+                {
+                    Log.Information("{Key}\t{Type}\t{FileName}",$"{parentMapEntry.Key,-16}","Directory",parentMapEntry.FileName);
+                }
+                else
+                {
+                    Log.Information("{Key}\t{Type}\t\t{FileName}",$"{parentMapEntry.Key,-16}","File",parentMapEntry.FileName);
+                }
+            }
+
+            Console.WriteLine();
+        }
+        else
+        {
+            Log.Information("Dumping details for file record with key '{Key}'",key);
+            Console.WriteLine();
+            
+            //old
+            //Log.Information("{Fr}",fr);
+            //end old
+            
+            var fa0 = fr.FixupData.FixupActual[0].ToArray();
+            var fa1 = fr.FixupData.FixupActual[1].ToArray();
+            var das0 = BitConverter.ToString(fa0);
+            var das1 = BitConverter.ToString(fa1);
+            
+            var actual = $"{das0} | {das1}";
+
+            var expected = BitConverter.ToString(BitConverter.GetBytes(fr.FixupData.FixupExpected));
+            
+            Log.Information("Entry-seq #: {Entry}-{Seq}, Offset: {Offset}, Flags: {Flags}, Log seq #: {Lsn}, Base Record entry-seq: {BaseEntry}-{BaseSeq}",$"0x{fr.EntryNumber:X}",$"0x{fr.SequenceNumber:X}",$"0x{fr.Offset:X}",fr.EntryFlags,$"0x{fr.LogSequenceNumber:X}",$"0x{fr.MftRecordToBaseRecord.MftEntryNumber:X}",$"0x{fr.MftRecordToBaseRecord.MftSequenceNumber:X}");
+            Log.Information("Reference count: {RefCount}, FixUp Data Expected: {Expected:X}, FixUp Data Actual: {Actual} (FixUp OK: {Ok})",$"0x{fr.ReferenceCount:X}",expected,actual,fr.FixupOk);
+
+            void DumpAttributeInfo(Attribute item, string description)
+            {
+                Log.Information("**** {Type} ****",description);
+
+                if (item.AttributeDataFlag > 0)
+                {
+                    Log.Information("Attribute #: {AttrNumber}, Size: {Size}, Attribute flags: {AttributeFlags}, Content size: {ContentSize}, Name size: {NameSize}, ContentOffset {ContentOffset}. Resident: {Resident}", $"0x{item.AttributeNumber:X}",
+                        $"0x{item.AttributeSize:X}", item.AttributeDataFlag, $"0x{item.AttributeContentLength:X}", $"0x{item.NameSize:X}", $"0x{item.ContentOffset:X}", item.IsResident);
+                    return;
+                }
+                
+                Log.Information("Attribute #: {AttrNumber}, Size: {Size}, Content size: {ContentSize}, Name size: {NameSize}, ContentOffset {ContentOffset}. Resident: {Resident}", $"0x{item.AttributeNumber:X}",
+                    $"0x{item.AttributeSize:X}", $"0x{item.AttributeContentLength:X}", $"0x{item.NameSize:X}", $"0x{item.ContentOffset:X}", item.IsResident);
+            }
+            
+            Console.WriteLine();
+            
+            foreach (var frAttribute in fr.Attributes)
+            {
+                switch (frAttribute)
+                {
+                    case StandardInfo item:
+                        DumpAttributeInfo(item,"STANDARD INFO");
+
+                        Log.Information("Flags: {Flags}, Max Version: {MaxVersion}, Flags 2: {Flags2}, Class Id: {ClassId}, Owner Id: {OwnerId}, Security Id: {SecurityId}, Quota charged: {Quota}, Update sequence #: {Usn}",item.Flags,$"0x{item.MaxVersion:X}",item.Flags2,$"0x{item.ClassId:X}",$"0x{item.OwnerId:X}",$"0x{item.SecurityId:X}",$"0x{item.QuotaCharged:X}",$"0x{item.UpdateSequenceNumber:X}");
+                        Console.WriteLine();
+                        
+                        Log.Information("Created On: {Date}", item.CreatedOn);
+                        Log.Information("Modified On: {Date}", item.ContentModifiedOn);
+                        Log.Information("Record Modified On: {Date}", item.RecordModifiedOn);
+                        Log.Information("Last Accessed On: {Date}", item.LastAccessedOn);
+                        
+                        Console.WriteLine();
+                        
+                        break;
+                    
+                    case FileName item:
+                        DumpAttributeInfo(item,"FILE NAME");
+                        
+                        Console.WriteLine();
+                        
+                        Log.Information("File name: {Thing}",item.FileInfo.FileName);
+                        Log.Information("Flags: {Flags}, Name Type: {NameType}, Reparse Value: {Reparse}, Physical Size: {Physical}, Logical Size: {Logical}",item.FileInfo.Flags,item.FileInfo.NameType,$"0x{item.FileInfo.ReparseValue:X}",$"0x{item.FileInfo.PhysicalSize:X}",$"0x{item.FileInfo.LogicalSize:X}");
+                        Log.Information("Parent Entry-seq #: {Entry}-{Seq}",$"0x{item.FileInfo.ParentMftRecord.MftEntryNumber:X}",$"0x{item.FileInfo.ParentMftRecord.MftSequenceNumber:X}");
+                        
+                        Console.WriteLine();
+                        
+                        Log.Information("Created On: {Date}", item.FileInfo.CreatedOn);
+                        Log.Information("Modified On: {Date}", item.FileInfo.ContentModifiedOn);
+                        Log.Information("Record Modified On: {Date}", item.FileInfo.RecordModifiedOn);
+                        Log.Information("Last Accessed On: {Date}", item.FileInfo.LastAccessedOn);
+                        
+                        Console.WriteLine();
+                        break;
+                    
+                    case Data item:
+                        DumpAttributeInfo(item,"DATA");
+                        Console.WriteLine();
+                        
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+
+                    case SecurityDescriptor item:
+                        DumpAttributeInfo(item,"SECURITY DESCRIPTOR");
+                        Console.WriteLine();
+                        
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+
+                    case IndexRoot item:
+                        DumpAttributeInfo(item,"INDEX ROOT");
+                        Console.WriteLine();
+                        
+                        
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+                    case IndexAllocation item:
+                        DumpAttributeInfo(item,"INDEX ALLOCATION");
+                        Console.WriteLine();
+                        
+                        
+                        
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+
+                    case Bitmap item:
+                        DumpAttributeInfo(item,"BITMAP");
+                        Console.WriteLine();
+                        
+                        
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+                    
+                    case LoggedUtilityStream item:
+                        DumpAttributeInfo(item,"LOGGED UTILITY STREAM");
+                        Console.WriteLine();
+                        
+                        
+
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+                    
+                    case ExtendedAttribute item:
+                        DumpAttributeInfo(item,"EXTENDED ATTRIBUTE");
+                        Console.WriteLine();
+                        
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+                    
+                    case ReparsePoint item:
+                        DumpAttributeInfo(item,"REPARSE POINT");
+                        Console.WriteLine();
+                        
+                        Log.Information("Substitute Name: {SubstituteName} Print Name: {PrintName} Tag: {Tag}",item.SubstituteName,item.PrintName,item.Tag);
+                        
+                        Log.Information("{Item}",item);
+                        Console.WriteLine();
+                        break;
+                    
+                    case VolumeInformation item:
+                        DumpAttributeInfo(item,"VOLUME INFORMATION");
+                        Console.WriteLine();
+                        
+                        Log.Information("Volume Flags: {Flags} Major Version: {MajorVersion} Minor Version: {MinorVersion} Unknown Bytes: {Bytes} ",item.VolumeFlags,$"0x{item.MajorVersion:X}",$"0x{item.MinorVersion:X}",BitConverter.ToString(item.UnknownBytes));
+                        
+                        Console.WriteLine();
+                        
+                        break;
+                    
+                    case VolumeName item:
+                        DumpAttributeInfo(item,"VOLUME NAME");
+                        Console.WriteLine();
+                        
+                        Log.Information("Volume Name: {Name}",item.VolName);
+                        
+                        Console.WriteLine();
+                        break;
+
+                    
+                    default:
+                        Log.Information("{Attrib}",frAttribute);
+                        throw new Exception($"{frAttribute.GetType()}");
+                }
+                
+            }
+        }
+        
 
         #endregion
     }
@@ -1965,11 +2180,9 @@ public class Program
         {
             try
             {
-                using (var br = new BinaryReader(new FileStream(file, FileMode.Open, FileAccess.Read)))
-                {
-                    buff = br.ReadBytes(50);
-                    Log.Verbose("Raw bytes: {RawBytes}",BitConverter.ToString(buff));
-                }
+                using var br = new BinaryReader(new FileStream(file, FileMode.Open, FileAccess.Read));
+                buff = br.ReadBytes(50);
+                Log.Verbose("Raw bytes: {RawBytes}",BitConverter.ToString(buff));
             }
             catch (Exception)
             {
