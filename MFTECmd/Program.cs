@@ -16,6 +16,7 @@ using System.Threading.Tasks;
 using Boot;
 using CsvHelper.Configuration;
 using Exceptionless;
+using I30;
 using MFT;
 using MFT.Attributes;
 using MFT.Other;
@@ -30,6 +31,7 @@ using ServiceStack.Text;
 using Usn;
 using Attribute = MFT.Attributes.Attribute;
 using CsvWriter = CsvHelper.CsvWriter;
+
 #if !NET6_0
 using Directory = Alphaleonis.Win32.Filesystem.Directory;
 using File = Alphaleonis.Win32.Filesystem.File;
@@ -73,7 +75,7 @@ public class Program
         {
             new Option<string>(
                 "-f",
-                "File to process ($MFT | $J | $Boot | $SDS). Required"),
+                "File to process ($MFT | $J | $Boot | $SDS | $I30). Required"),
 
             new Option<string>(
                 "-m",
@@ -271,7 +273,7 @@ public class Program
             else if (!File.Exists(f))
             {
                 //the path is off the root of the drive, so it works for things like $Boot, $MFT, etc
-                Log.Warning("File '{F}' not found. Exiting",f);
+                Log.Warning("File {F} not found. Exiting",f);
                 return;
             }
         }
@@ -304,7 +306,7 @@ public class Program
         {
             if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(csv))) == false)
             {
-                Log.Error("Destination location not available for '{Csv}'. Verify drive letter and try again. Exiting",csv);
+                Log.Error("Destination location not available for {Csv}. Verify drive letter and try again. Exiting",csv);
                 Console.WriteLine();
                 return;
             }
@@ -324,7 +326,7 @@ public class Program
         {
             if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(body))) == false)
             {
-                Log.Error("Destination location not available for '{Body}'. Verify drive letter and try again. Exiting",body);
+                Log.Error("Destination location not available for {Body}. Verify drive letter and try again. Exiting",body);
                 Console.WriteLine();
                 return;
             }
@@ -333,6 +335,21 @@ public class Program
 
         switch (ft)
         {
+            case FileType.I30:
+                if (csv.IsNullOrEmpty())
+                {
+                    var helpBld = new HelpBuilder(LocalizationResources.Instance, Console.WindowWidth);
+                    var hc = new HelpContext(helpBld, _rootCommand, Console.Out);
+
+                    helpBld.Write(hc);
+
+                    Log.Warning("--csv is required. Exiting");
+                    return;
+                }
+                
+                ProcessI30(f, csv, csvf, json, jsonf, dt);
+                break;
+                
             case FileType.Mft:
                 if (csv.IsNullOrEmpty() &&
                     json.IsNullOrEmpty() &&
@@ -377,7 +394,7 @@ public class Program
 
                     if (Directory.Exists(Directory.GetDirectoryRoot(Path.GetFullPath(dd))) == false)
                     {
-                        Log.Error("Destination location not available for '{Dd}'. Verify drive letter and try again. Exiting",dd);
+                        Log.Error("Destination location not available for {Dd}. Verify drive letter and try again. Exiting",dd);
                         Console.WriteLine();
                         return;
                     }
@@ -418,7 +435,7 @@ public class Program
                     //mft was supplied, does it exist?
                     if (File.Exists(m) == false)
                     {
-                        Log.Error("MFT file '{M}' does not exist! Verify path and try again. Exiting",m);
+                        Log.Error("MFT file {M} does not exist! Verify path and try again. Exiting",m);
                         Console.WriteLine();
                         return;
                     }
@@ -427,7 +444,7 @@ public class Program
 
                     if (ftm != FileType.Mft)
                     {
-                        Log.Error("File '{M}' is not an MFT file!! Verify path and try again. Exiting",m);
+                        Log.Error("File {M} is not an MFT file!! Verify path and try again. Exiting",m);
                         return;
                     }
 
@@ -459,9 +476,129 @@ public class Program
             default:
                 //unknown
                 Log.Error(
-                    "Unknown file type! Send '{F}' to saericzimmerman@gmail.com for assistance. Exiting",f);
+                    "Unknown file type! Send {F} to saericzimmerman@gmail.com for assistance. Exiting",f);
                 return;
         }
+    }
+
+    private static void ProcessI30(string f, string csv, string csvf, string json, string jsonf, string dateFormat)
+    {
+        var sw = new Stopwatch();
+        sw.Start();
+
+        I30.I30 i30 = null;
+
+        try
+        {
+            i30 = I30File.Load(f);
+            
+        }
+        catch (Exception e)
+        {
+            Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
+            return;
+        }
+        
+        sw.Stop();
+        
+        Console.WriteLine();
+        Log.Information(
+            "Processed {F} in {TotalSeconds:N4} seconds",f,sw.Elapsed.TotalSeconds);
+        Console.WriteLine();
+
+        var dt = DateTimeOffset.UtcNow;
+        
+        Log.Information("$I30 contains {Active:N0} active and {Slack:N0} slack entries",i30.Entries.Count(t=>t.FromSlack == false),i30.Entries.Count(t=>t.FromSlack));
+        
+        StreamWriter swCsv;
+
+        if (Directory.Exists(csv) == false)
+        {
+            Log.Information(
+                "Path to {Csv} doesn't exist. Creating...",csv);
+
+            try
+            {
+                Directory.CreateDirectory(csv);
+            }
+            catch (Exception e)
+            {
+                Log.Fatal(e,
+                    "Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
+                return;
+            }
+        }
+
+        string outName;
+        string outFile;
+        
+        outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$I30_Output.csv";
+
+        if (csvf.IsNullOrEmpty() == false)
+        {
+            outName = Path.GetFileName(csvf);
+        }
+        
+        outFile = Path.Combine(csv, outName);
+
+        Log.Information("\tCSV output will be saved to {OutFile}",outFile);
+
+        swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+
+        _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
+        
+        //start here
+        
+           var foo = _csvWriter.Context.AutoMap<I30Out>();
+           
+           foo.Map(t => t.CreatedOn).Convert(t => $"{t.Value.CreatedOn?.ToString(dateFormat)}");
+           foo.Map(t => t.LastAccessedOn).Convert(t => $"{t.Value.LastAccessedOn?.ToString(dateFormat)}");
+           foo.Map(t => t.RecordModifiedOn).Convert(t => $"{t.Value.RecordModifiedOn?.ToString(dateFormat)}");
+           foo.Map(t => t.ContentModifiedOn).Convert(t => $"{t.Value.ContentModifiedOn?.ToString(dateFormat)}");
+
+                    _csvWriter.Context.RegisterClassMap(foo);
+
+                    _csvWriter.WriteHeader<I30Out>();
+                    _csvWriter.NextRecord();
+
+                    foreach (var index in i30.Entries)
+                    {
+                        Log.Debug("Processing index entry at offset '{OFfset}'",$"0x{index.AbsoluteOffset:X}");
+
+                        var ieOut = new I30Out
+                        {
+                        
+                            Offset = index.AbsoluteOffset,
+                            FromSlack = index.FromSlack,
+                            SelfMftEntry = index.MftReferenceSelf?.MftEntryNumber,
+                            SelfMftSequence = index.MftReferenceSelf?.MftSequenceNumber,
+                            FileName = index.FileInfo.FileName,
+                            Flags = index.FileInfo.Flags.ToString().Replace(", ", "|"),
+                            NameType = index.FileInfo.NameType,
+                            ParentMftEntry = index.FileInfo.ParentMftRecord.MftEntryNumber,
+                            ParentMftSequence = index.FileInfo.ParentMftRecord.MftSequenceNumber,
+                            CreatedOn = index.FileInfo.CreatedOn,
+                            ContentModifiedOn = index.FileInfo.ContentModifiedOn,
+                            RecordModifiedOn = index.FileInfo.RecordModifiedOn,
+                            LastAccessedOn = index.FileInfo.LastAccessedOn,
+                            PhysicalSize = index.FileInfo.PhysicalSize,
+                            LogicalSize = index.FileInfo.LogicalSize,
+                            
+                            SourceFile = f
+                        };
+
+                        Log.Verbose("{Entry}",index);
+
+                        _csvWriter.WriteRecord(ieOut);
+                        _csvWriter.NextRecord();
+                    }
+        
+        //END HERE 
+        
+        swCsv.Flush();
+        swCsv.Close();
+
+        Console.WriteLine();
     }
 
     private static void ProcessBoot(string f, bool vss, bool dedupe, string csv, string csvf)
@@ -506,7 +643,7 @@ public class Program
             {
                 try
                 {
-                    Log.Warning("'{F}' is in use. Rerouting...",f);
+                    Log.Warning("{F} is in use. Rerouting...",f);
 
                     var ll = new List<string> { f };
 
@@ -549,7 +686,7 @@ public class Program
 
             Console.WriteLine();
             Log.Information(
-                "Processed '{F}'{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
+                "Processed {F}{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
             Console.WriteLine();
 
             StreamWriter swCsv = null;
@@ -559,7 +696,7 @@ public class Program
                 if (Directory.Exists(csv) == false)
                 {
                     Log.Information(
-                        "Path to '{Csv}' doesn't exist. Creating...",csv);
+                        "Path to {Csv} doesn't exist. Creating...",csv);
 
                     try
                     {
@@ -568,7 +705,7 @@ public class Program
                     catch (Exception ex)
                     {
                         Log.Fatal(
-                            ex,"Unable to create directory '{Csv}'. Does a file with the same name exist? Exiting",csv);
+                            ex,"Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
                         return;
                     }
                 }
@@ -582,7 +719,7 @@ public class Program
 
                 var outFile = Path.Combine(csv, outName);
 
-                Log.Information("CSV output will be saved to '{OutFile}'",outFile);
+                Log.Information("CSV output will be saved to {OutFile}",outFile);
                 Console.WriteLine();
 
                 swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
@@ -598,7 +735,7 @@ public class Program
 
             foreach (var b in bootFiles)
             {
-                Log.Information("Boot file: '{Key}'",b.Key);
+                Log.Information("Boot file: {Key}",b.Key);
                 Console.WriteLine();
                 Log.Information("Boot entry point: {BootEntryPoint}",b.Value.BootEntryPoint);
                 Log.Information("File system signature: {FileSystemSignature}",b.Value.FileSystemSignature);
@@ -706,7 +843,7 @@ public class Program
             {
                 try
                 {
-                    Log.Warning("'{F}' is in use. Rerouting...",f);
+                    Log.Warning("{F} is in use. Rerouting...",f);
                     Console.WriteLine();
 
                     var ll = new List<string> { f };
@@ -753,7 +890,7 @@ public class Program
 
             Console.WriteLine();
             Log.Information(
-                "Processed '{F}'{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
+                "Processed {F}{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
             Console.WriteLine();
 
             if (json.IsNullOrEmpty() == false)
@@ -763,7 +900,7 @@ public class Program
 
             foreach (var jFile in jFiles)
             {
-                Log.Information("Usn entries found in '{Key}': {Count:N0}",jFile.Key,jFile.Value.UsnEntries.Count);
+                Log.Information("Usn entries found in {Key}: {Count:N0}",jFile.Key,jFile.Value.UsnEntries.Count);
 
                 if (csv.IsNullOrEmpty() == false)
                 {
@@ -772,7 +909,7 @@ public class Program
                     if (Directory.Exists(csv) == false)
                     {
                         Log.Information(
-                            "Path to '{Csv}' doesn't exist. Creating...",csv);
+                            "Path to {Csv} doesn't exist. Creating...",csv);
 
                         try
                         {
@@ -781,7 +918,7 @@ public class Program
                         catch (Exception e)
                         {
                             Log.Fatal(e,
-                                "Unable to create directory '{Csv}'. Does a file with the same name exist? Exiting",csv);
+                                "Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
                             return;
                         }
                     }
@@ -816,7 +953,7 @@ public class Program
 
                     outFile = Path.Combine(csv, outName);
 
-                    Log.Information("\tCSV output will be saved to '{OutFile}'",outFile);
+                    Log.Information("\tCSV output will be saved to {OutFile}",outFile);
 
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
@@ -908,7 +1045,7 @@ public class Program
                         if (Directory.Exists(json) == false)
                         {
                             Log.Information(
-                                "Path to '{Json}' doesn't exist. Creating...",json);
+                                "Path to {Json} doesn't exist. Creating...",json);
 
                             try
                             {
@@ -917,7 +1054,7 @@ public class Program
                             catch (Exception e)
                             {
                                 Log.Fatal(e,
-                                    "Unable to create directory '{Json}'. Does a file with the same name exist? Exiting",json);
+                                    "Unable to create directory {Json}. Does a file with the same name exist? Exiting",json);
                                 return;
                             }
                         }
@@ -949,7 +1086,7 @@ public class Program
 
                         outFile = Path.Combine(json, outName);
 
-                        Log.Information("\tJSON output will be saved to '{OutFile}'",outFile);
+                        Log.Information("\tJSON output will be saved to {OutFile}",outFile);
 
                         try
                         {
@@ -1030,7 +1167,7 @@ public class Program
                 try
                 {
                     Console.WriteLine();
-                    Log.Information("'{F}' is in use. Rerouting...",f);
+                    Log.Information("{F} is in use. Rerouting...",f);
 
                     var ll = new List<string> { f };
 
@@ -1073,14 +1210,14 @@ public class Program
 
             Console.WriteLine();
             Log.Information(
-                "Processed '{F}'{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
+                "Processed {F}{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
             Console.WriteLine();
 
             var dt = DateTimeOffset.UtcNow;
 
             foreach (var sdsFile in sdsFiles)
             {
-                Log.Information("SDS entries found in '{Key}': {Count:N0}",sdsFile.Key,sdsFile.Value.SdsEntries.Count);
+                Log.Information("SDS entries found in {Key}: {Count:N0}",sdsFile.Key,sdsFile.Value.SdsEntries.Count);
 
                 if (csv.IsNullOrEmpty() == false)
                 {
@@ -1089,7 +1226,7 @@ public class Program
                     if (Directory.Exists(csv) == false)
                     {
                         Log.Information(
-                            "Path to '{Csv}' doesn't exist. Creating...",csv);
+                            "Path to {Csv} doesn't exist. Creating...",csv);
 
                         try
                         {
@@ -1098,7 +1235,7 @@ public class Program
                         catch (Exception e)
                         {
                             Log.Fatal(e,
-                                "Unable to create directory '{Csv}'. Does a file with the same name exist? Exiting",csv);
+                                "Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
                             return;
                         }
                     }
@@ -1133,7 +1270,7 @@ public class Program
 
                     outFile = Path.Combine(csv, outName);
 
-                    Log.Information("\tCSV output will be saved to '{OutFile}'",outFile);
+                    Log.Information("\tCSV output will be saved to {OutFile}",outFile);
 
                     swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
@@ -1148,7 +1285,7 @@ public class Program
 
                     foreach (var sdsEntry in sdsFile.Value.SdsEntries)
                     {
-                        Log.Debug("Processing Id '{Id}'",sdsEntry.Id);
+                        Log.Debug("Processing Id {Id}",sdsEntry.Id);
 
                         var sdO = new SdsOut
                         {
@@ -1219,7 +1356,7 @@ public class Program
                 if (valOk == false)
                 {
                     Log.Warning(
-                        "Could not parse '{Ds}' to valid value. Exiting",ds);
+                        "Could not parse {Ds} to valid value. Exiting",ds);
                     return;
                 }
 
@@ -1234,7 +1371,7 @@ public class Program
                     }
 
                     Console.WriteLine();
-                    Log.Information("Details for security record # {Id1} (0x{Id:X}), Found in '{Key}'",sd.Id,sd.Id,sds1.Key);
+                    Log.Information("Details for security record # {Id1} (0x{Id:X}), Found in {Key}",sd.Id,sd.Id,sds1.Key);
                     Log.Information("Hash value: {Hash}, Offset: {Offset}",sd.Hash,$"0x{sd.Offset:X}");
                     Log.Information("Control flags: {Flags}",sd.SecurityDescriptor.Control.ToString().Replace(", ", " | "));
                     Console.WriteLine();
@@ -1351,7 +1488,7 @@ public class Program
         }
         catch (UnauthorizedAccessException)
         {
-            Log.Warning("'{File}' is in use. Rerouting...",file);
+            Log.Warning("{File} is in use. Rerouting...",file);
             Console.WriteLine();
             
             var ll = new List<string> { file };
@@ -1403,7 +1540,7 @@ public class Program
         }
 
         Log.Information(
-            "Processed '{File}'{Extra} in {TotalSeconds:N4} seconds",file,extra,sw.Elapsed.TotalSeconds);
+            "Processed {File}{Extra} in {TotalSeconds:N4} seconds",file,extra,sw.Elapsed.TotalSeconds);
         Console.WriteLine();
         
         var dateTimeOffset = DateTimeOffset.UtcNow;
@@ -1425,7 +1562,7 @@ public class Program
                 if (Directory.Exists(body) == false)
                 {
                     Log.Information(
-                        "Path to '{Body}' doesn't exist. Creating...",body);
+                        "Path to {Body} doesn't exist. Creating...",body);
                     try
                     {
                         Directory.CreateDirectory(body);
@@ -1433,7 +1570,7 @@ public class Program
                     catch (Exception e)
                     {
                         Log.Fatal(e,
-                            "Unable to create directory '{Body}'. Does a file with the same name exist? Exiting",body);
+                            "Unable to create directory {Body}. Does a file with the same name exist? Exiting",body);
                         return;
                     }
                 }
@@ -1468,7 +1605,7 @@ public class Program
 
                 outFile = Path.Combine(body, outName);
 
-                Log.Information("\tBodyfile output will be saved to '{OutFile}'",outFile);
+                Log.Information("\tBodyfile output will be saved to {OutFile}",outFile);
 
                 try
                 {
@@ -1527,7 +1664,7 @@ public class Program
                     if (Directory.Exists(csv) == false)
                     {
                         Log.Information(
-                            "Path to '{Csv}' doesn't exist. Creating...",csv);
+                            "Path to {Csv} doesn't exist. Creating...",csv);
                         try
                         {
                             Directory.CreateDirectory(csv);
@@ -1535,7 +1672,7 @@ public class Program
                         catch (Exception e)
                         {
                             Log.Fatal(e,
-                                "Unable to create directory '{Csv}'. Does a file with the same name exist? Exiting",csv);
+                                "Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
                             return;
                         }
                     }
@@ -1570,7 +1707,7 @@ public class Program
 
                     outFile = Path.Combine(csv, outName);
 
-                    Log.Information("\tCSV output will be saved to '{OutFile}'",outFile);
+                    Log.Information("\tCSV output will be saved to {OutFile}",outFile);
 
                     if (fl)
                     {
@@ -1581,7 +1718,7 @@ public class Program
                             outFileFl = Path.Combine(Path.GetDirectoryName(outFileFl), $"{Path.GetFileNameWithoutExtension(outFileFl)}_FileListing{Path.GetExtension(outFileFl)}");
                         }
 
-                        Log.Information("\tCSV file listing output will be saved to '{OutFileFl}'",outFileFl);
+                        Log.Information("\tCSV file listing output will be saved to {OutFileFl}",outFileFl);
 
                         swFileList = new StreamWriter(outFileFl, false, Encoding.UTF8);
                         _fileListWriter = new CsvWriter(swFileList, CultureInfo.InvariantCulture);
@@ -1714,7 +1851,7 @@ public class Program
                 if (Directory.Exists(json) == false)
                 {
                     Log.Information(
-                        "Path to '{Json}' doesn't exist. Creating...",json);
+                        "Path to {Json} doesn't exist. Creating...",json);
 
                     try
                     {
@@ -1723,7 +1860,7 @@ public class Program
                     catch (Exception e)
                     {
                         Log.Fatal(e,
-                            "Unable to create directory '{Json}'. Does a file with the same name exist? Exiting",json);
+                            "Unable to create directory {Json}. Does a file with the same name exist? Exiting",json);
                         return;
                     }
                 }
@@ -1755,7 +1892,7 @@ public class Program
 
                 outFile = Path.Combine(json, outName);
 
-                Log.Information("\tJSON output will be saved to '{OutFile}'",outFile);
+                Log.Information("\tJSON output will be saved to {OutFile}",outFile);
 
                 try
                 {
@@ -1817,13 +1954,13 @@ public class Program
 
                 File.WriteAllBytes(outFull, fileBytes);
 
-                Log.Information("FILE record at offset {Offset} dumped to '{OutFull}'",$"$0x{offset:X}",outFull);
+                Log.Information("FILE record at offset {Offset} dumped to {OutFull}",$"$0x{offset:X}",outFull);
                 Console.WriteLine();
             }
             else
             {
                 Log.Warning(
-                   "Could not parse '{Do}' to valid value. Exiting",@do);
+                   "Could not parse {Do} to valid value. Exiting",@do);
                 return;
             }
         }
@@ -1853,7 +1990,7 @@ public class Program
         // if (segs.Length == 2)
         // {
         //     Log.Warning(
-        //         "Could not parse '{De}' to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting",de);
+        //         "Could not parse {De} to valid values. Format is Entry#-Sequence# in either decimal or hex format. Exiting",de);
         //     return;
         // }
 
@@ -1982,7 +2119,7 @@ public class Program
             if (entryOk == false || seqOk == false)
             {
                 Log.Warning(
-                    "Could not parse '{De}' to valid values. Exiting",de);
+                    "Could not parse {De} to valid values. Exiting",de);
                 return;
             }
 
@@ -2002,7 +2139,7 @@ public class Program
         if (fr == null)
         {
             Log.Warning(
-                "Could not find file record with entry/seq '{De}'. Exiting",de);
+                "Could not find file record with entry/seq {De}. Exiting",de);
             return;
         }
 
@@ -2017,7 +2154,7 @@ public class Program
                 name = $"{pp}";
             }
 
-            Log.Information("Contents for '{Name}'",name);
+            Log.Information("Contents for {Name}",name);
             Console.WriteLine();
             Log.Information("Key\t\t\tType\t\tName");
             foreach (var parentMapEntry in dlist)
@@ -2036,7 +2173,7 @@ public class Program
         }
         else
         {
-            Log.Information("Dumping details for file record with key '{Key}'",key);
+            Log.Information("Dumping details for file record with key {Key}",key);
             Console.WriteLine();
             
             var fa0 = fr.FixupData.FixupActual[0].ToArray();
@@ -2512,8 +2649,9 @@ public class Program
         const int mftSig = 0x454C4946;
         const int sdsSig = 0x32FEC6CB;
         const int bootSig = 0x5346544E;
+        const int indxSig = 0x58444e49;
 
-        Log.Debug("Opening '{File}' and checking header",file);
+        Log.Debug("Opening {File} and checking header",file);
 
         var buff = new byte[50];
 
@@ -2539,7 +2677,7 @@ public class Program
                 {
                     Console.WriteLine();
                     Log.Fatal(e,
-                        "Error opening file '{File}'. Does it exist? Error: {Message} Exiting",file,e.Message);
+                        "Error opening file {File}. Does it exist? Error: {Message} Exiting",file,e.Message);
                     Console.WriteLine();
                     Environment.Exit(-1);
                 }
@@ -2549,7 +2687,7 @@ public class Program
             {
                 Console.WriteLine();
                 Log.Information(
-                    "Not enough data found in '{File}'. Is the file empty? Exiting",file);
+                    "Not enough data found in {File}. Is the file empty? Exiting",file);
                 Console.WriteLine();
                 Environment.Exit(-1);
             }
@@ -2564,6 +2702,9 @@ public class Program
 
             switch (sig32)
             {
+                case indxSig:
+                    Log.Debug("Found $I30 sig");
+                    return FileType.I30;
                 case logFileSig:
                     Log.Debug("Found $LogFile sig");
                     return FileType.LogFile;
@@ -2616,7 +2757,7 @@ public class Program
         {
             Console.WriteLine();
             Log.Fatal(e,
-                "Could not access '{File}'. Rerun the program as an administrator",file);
+                "Could not access {File}. Rerun the program as an administrator",file);
             Console.WriteLine();
             Environment.Exit(-1);
         }
@@ -2993,37 +3134,8 @@ public class Program
         UsnJournal = 2,
         Boot = 3,
         Sds = 4,
+        I30 = 5,
         Unknown = 99
     }
 }
 
-internal class ApplicationArguments
-{
-    public string File { get; set; }
-    public string MftFile { get; set; }
-    public string CsvDirectory { get; set; }
-    public string JsonDirectory { get; set; }
-    public string DateTimeFormat { get; set; }
-    public bool IncludeShortNames { get; set; }
-    public string DumpEntry { get; set; }
-    public bool Fls { get; set; }
-    public bool Debug { get; set; }
-    public bool Trace { get; set; }
-    public bool Vss { get; set; }
-    public bool Dedupe { get; set; }
-    public bool FileListing { get; set; }
-
-    public string BodyDirectory { get; set; }
-    public string BodyDriveLetter { get; set; }
-    public bool UseCr { get; set; }
-
-    public string CsvName { get; set; }
-    public string JsonName { get; set; }
-    public string BodyName { get; set; }
-
-    public string DumpDir { get; set; }
-    public string DumpOffset { get; set; }
-    public string DumpSecurity { get; set; }
-
-    public bool AllTimeStampsAllTime { get; set; }
-}
