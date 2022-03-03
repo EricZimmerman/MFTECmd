@@ -154,7 +154,12 @@ public class Program
                 "--at",
                 () => false,
                 "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10"),
-
+            
+            new Option<bool>(
+                "--rs",
+                () => false,
+                "When true, recover slack space from FILE records when processing MFT files. This option has no effect for $I30 files"),
+            
             new Option<bool>(
                 "--vss",
                 () => false,
@@ -219,7 +224,7 @@ public class Program
         }
     }
     
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool vss, bool dedupe, bool debug, bool trace)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -412,7 +417,7 @@ public class Program
                     return;
                 }
 
-                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de);
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs);
                 break;
             case FileType.LogFile:
                 Log.Warning("$LogFile not supported yet. Exiting");
@@ -448,7 +453,7 @@ public class Program
                         return;
                     }
 
-                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de);
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -1450,7 +1455,7 @@ public class Program
 
     
     
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1460,7 +1465,7 @@ public class Program
         sw.Start();
         try
         {
-            _mft = MftFile.Load(file);
+            _mft = MftFile.Load(file,rs);
             mftFiles.Add(file, _mft);
 
             var ll = new List<string>();
@@ -1481,7 +1486,7 @@ public class Program
 
                 foreach (var rawCopyReturn in rawFiles)
                 {
-                    localMft = new Mft(rawCopyReturn.FileStream);
+                    localMft = new Mft(rawCopyReturn.FileStream,rs);
                     mftFiles.Add(rawCopyReturn.InputFilename, localMft);
                 }
             }
@@ -1512,7 +1517,7 @@ public class Program
 
                 foreach (var rawCopyReturn in rawFiles)
                 {
-                    localMft = new Mft(rawCopyReturn.FileStream);
+                    localMft = new Mft(rawCopyReturn.FileStream,rs);
                     mftFiles.Add(rawCopyReturn.InputFilename, localMft);
                 }
 
