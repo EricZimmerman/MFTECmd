@@ -127,6 +127,10 @@ public class Program
                 "Dump full details for entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 5, 624-5 or 0x270-0x5."),
 
             new Option<bool>(
+                "--dr",
+                "When true, dump resident files to dir specified by --csv, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>_<FileName>.bin'"),
+
+            new Option<bool>(
                 "--fls",
                 () => false,
                 "When true, displays contents of directory specified by --de. Ignored when --de points to a file"),
@@ -224,7 +228,7 @@ public class Program
         }
     }
     
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -417,7 +421,13 @@ public class Program
                     return;
                 }
 
-                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs);
+                var drDir = string.Empty;
+                if (dr)
+                {
+                    drDir = Path.Combine(csv,"Resident");
+                }
+
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir);
                 break;
             case FileType.LogFile:
                 Log.Warning("$LogFile not supported yet. Exiting");
@@ -452,8 +462,14 @@ public class Program
                         Log.Error("File {M} is not an MFT file!! Verify path and try again. Exiting",m);
                         return;
                     }
+                    
+                    var drDir2 = string.Empty;
+                    if (dr)
+                    {
+                        drDir2 = $"{csv}\\Resident";
+                    }
 
-                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs);
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -1455,7 +1471,7 @@ public class Program
 
     
     
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1827,8 +1843,17 @@ public class Program
             {
                 try
                 {
-                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl);
-                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl);
+                    if (drDir.IsNullOrEmpty() == false)
+                    {
+                        Log.Information("\tResident data will be saved to {DataDir}",drDir);
+                        if (Directory.Exists(drDir) == false)
+                        {
+                            Directory.CreateDirectory(drDir);
+                        }
+                    }
+                    
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir);
                 }
                 catch (Exception ex)
                 {
@@ -1969,6 +1994,12 @@ public class Program
                 return;
             }
         }
+
+        #endregion
+
+        #region DumpResident
+
+   
 
         #endregion
 
@@ -2770,8 +2801,9 @@ public class Program
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl,string drDumpDir)
     {
+        
         foreach (var fr in records)
         {
             Log.Verbose(
@@ -2808,6 +2840,27 @@ public class Program
                 var mftr = GetCsvData(fr.Value, fn, null, alltimestamp);
 
                 var ads = fr.Value.GetAlternateDataStreams();
+
+                if (drDumpDir.IsNullOrEmpty() == false)
+                {
+                    var data = fr.Value.Attributes.Where(t =>
+                        t.AttributeType == AttributeType.Data);
+
+                    foreach (var da in data)
+                    {
+                        if (da.IsResident == false)
+                        {
+                            continue;
+                        }
+
+                        var outNameR = Path.Combine(drDumpDir, $"{fr.Value.EntryNumber}-{fr.Value.SequenceNumber}_{fn.FileInfo.FileName}.bin");
+                        
+                        Log.Debug("Saving resident data for {Entry}-{Seq} to {File}",fr.Value.EntryNumber,fr.Value.SequenceNumber,outNameR);
+                        
+                        File.WriteAllBytes(outNameR,((Data)da).ResidentData.Data);
+                    }
+                }
+                
 
                 mftr.HasAds = ads.Any();
 
