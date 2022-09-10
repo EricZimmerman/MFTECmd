@@ -55,6 +55,10 @@ public class Program
                                             @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --json ""c:\temp\jsonout""" + "\r\n\t " +
                                             @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --body ""c:\temp\bout"" --bdl c" + "\r\n\t " +
                                             @"   MFTECmd.exe -f ""C:\Temp\SomeMFT"" --de 5-5" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""c:\temp\SomeJ"" --csv c:\temp" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""c:\temp\SomeBoot""" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""c:\temp\SomeSecure_SDS"" --csv c:\temp" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""c:\temp\SomeI30"" --csv c:\temp" +
                                             "\r\n\t" +
                                             "    Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes";
 
