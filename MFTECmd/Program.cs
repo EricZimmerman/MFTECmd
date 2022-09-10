@@ -79,7 +79,7 @@ public class Program
 
             new Option<string>(
                 "-m",
-                "$MFT file to use when -f points to a $J file (Use this to resolve parent path in $J CSV output).\r\n"),
+                "$MFT file to use when -f points to a $J file (Use this to resolve parent path in $J CSV output)\r\n"),
 
             new Option<string>(
                 "--json",
@@ -116,28 +116,28 @@ public class Program
 
             new Option<string>(
                 "--dd",
-                "Directory to save exported FILE record. --do is also required when using this option"),
+                "Directory to save exported $MFT FILE record. --do is also required when using this option"),
 
             new Option<string>(
                 "--do",
-                "Offset of the FILE record to dump as decimal or hex. Ex: 5120 or 0x1400 Use --de or --debug to see offsets\r\n"),
+                "Offset of the $MFT FILE record to dump as decimal or hex. Ex: 5120 or 0x1400 Use --de or --debug to see offsets\r\n"),
 
             new Option<string>(
                 "--de",
-                "Dump full details for entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 5, 624-5 or 0x270-0x5."),
+                "Dump full details for $MFT entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 5, 624-5 or 0x270-0x5."),
 
             new Option<bool>(
                 "--dr",
-                "When true, dump resident files to dir specified by --csv, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>_<FileName>.bin'"),
+                "When true, dump $MFT resident files to dir specified by --csv, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>_<FileName>.bin'"),
 
             new Option<bool>(
                 "--fls",
                 () => false,
-                "When true, displays contents of directory specified by --de. Ignored when --de points to a file"),
+                "When true, displays contents of directory from $MFT specified by --de. Ignored when --de points to a file"),
 
             new Option<string>(
                 "--ds",
-                "Dump full details for Security Id as decimal or hex. Example: 624 or 0x270\r\n"),
+                "Dump full details for Security Id from $SDS as decimal or hex. Example: 624 or 0x270\r\n"),
 
             new Option<string>(
                 "--dt",
@@ -147,22 +147,22 @@ public class Program
             new Option<bool>(
                 "--sn",
                 () => false,
-                "Include DOS file name types"),
+                "Include DOS file name types in $MFT output"),
 
             new Option<bool>(
                 "--fl",
                 () => false,
-                "Generate condensed file listing. Requires --csv"),
+                "Generate condensed file listing of parsed $MFT contents. Requires --csv"),
 
             new Option<bool>(
                 "--at",
                 () => false,
-                "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10"),
+                "When true, include all timestamps from 0x30 attribute vs only when they differ from 0x10 in the $MFT"),
             
             new Option<bool>(
                 "--rs",
                 () => false,
-                "When true, recover slack space from FILE records when processing MFT files. This option has no effect for $I30 files"),
+                "When true, recover slack space from FILE records when processing $MFT files. This option has no effect for $I30 files"),
             
             new Option<bool>(
                 "--vss",
