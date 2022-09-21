@@ -1984,7 +1984,7 @@ public class Program
 
                 File.WriteAllBytes(outFull, fileBytes);
 
-                Log.Information("FILE record at offset {Offset} dumped to {OutFull}",$"$0x{offset:X}",outFull);
+                Log.Information("FILE record at offset {Offset} dumped to {OutFull}",$"0x{offset:X}",outFull);
                 Console.WriteLine();
             }
             else
@@ -2608,7 +2608,8 @@ public class Program
                                     
                                     break;
                                 case "$KERNEL.PURGE.APPFIXCACHE":
-
+                                case "$KERNEL.PURGE.APPXFICACHE":
+                                    
                                     var af = itemSubItem as AppFixCache;
                                     
                                     Log.Information("  $KERNEL.PURGE.APPFIXCACHE | Timestamp: {Timestamp} Remaining bytes: {RemainingBytes}",af.Timestamp,BitConverter.ToString(af.RemainingBytes));
@@ -2616,6 +2617,7 @@ public class Program
                                 case ".CLASSINFO":
                                     Log.Information("  .ClassInfo: Not decoded");
                                     break;
+                             
                                 
                                 default:
                                     Log.Information("{Si}",itemSubItem);
