@@ -6,7 +6,7 @@
         <Authors>Eric R. Zimmerman</Authors>
         <Description>MFTECmd</Description>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-        <Version>1.2.2.0</Version>
+        <Version>1.2.2.1</Version>
         <LangVersion>10</LangVersion>
         <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
         <Copyright>Eric R. Zimmerman</Copyright>
@@ -20,18 +20,18 @@
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="ERZHelpers" Version="1.3.0" />
-        <PackageReference Include="Fody" Version="6.6.3">
+        <PackageReference Include="Fody" Version="6.6.4">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="I30" Version="1.2.2" />
-        <PackageReference Include="MFT" Version="1.2.2" />
+        <PackageReference Include="MFT" Version="1.2.2.1" />
         <PackageReference Include="Serilog" Version="2.12.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
-        <PackageReference Include="CsvHelper" Version="28.0.1" />
+        <PackageReference Include="CsvHelper" Version="29.0.0" />
         <PackageReference Include="Exceptionless" Version="4.8.0" />
         <PackageReference Include="Secure" Version="1.2.0" />
-        <PackageReference Include="ServiceStack.Text" Version="6.3.0" />
+        <PackageReference Include="ServiceStack.Text" Version="6.4.0" />
         <PackageReference Include="System.CommandLine" Version="2.0.0-beta2.21617.1" />
         <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta2.21617.1" />
         <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
