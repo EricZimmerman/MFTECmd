@@ -33,7 +33,7 @@
         <PackageReference Include="Secure" Version="1.4.0" />
         <PackageReference Include="ServiceStack.Text" Version="6.9.0" />
         <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
-        <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta2.21617.1" />
+        <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta4.22272.1" />
         <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
         <PackageReference Include="System.Text.Encoding.CodePages" Version="7.0.0" />
         <PackageReference Include="Usn" Version="1.4.0" />
