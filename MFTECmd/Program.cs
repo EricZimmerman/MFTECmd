@@ -132,7 +132,7 @@ public class Program
 
             new Option<bool>(
                 "--dr",
-                "When true, dump $MFT resident files to dir specified by --csv, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>_<FileName>.bin'"),
+                "When true, dump $MFT resident files to dir specified by --csv or --json, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>_<FileName>.bin'"),
 
             new Option<bool>(
                 "--fls",
@@ -428,7 +428,8 @@ public class Program
                 var drDir = string.Empty;
                 if (dr)
                 {
-                    drDir = Path.Combine(csv,"Resident");
+                    var residentDirBase = !json.IsNullOrEmpty() ? json : csv;
+                    drDir = Path.Combine(residentDirBase, "Resident");
                 }
 
                 ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir);
@@ -470,7 +471,8 @@ public class Program
                     var drDir2 = string.Empty;
                     if (dr)
                     {
-                        drDir2 = $"{csv}\\Resident";
+                        var residentDirBase = !json.IsNullOrEmpty() ? json : csv;
+                        drDir2 = $"{residentDirBase}\\Resident";
                     }
 
                     ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2);
