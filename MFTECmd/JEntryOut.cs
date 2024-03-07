@@ -8,9 +8,9 @@ public class JEntryOut
     public string Name { get; set; }
     public string Extension => $"{Path.GetExtension(Name)}{string.Empty}";
     public ulong EntryNumber { get; set; }
-    public int SequenceNumber { get; set; }
+    public uint SequenceNumber { get; set; }
     public ulong ParentEntryNumber { get; set; }
-    public int ParentSequenceNumber { get; set; }
+    public uint ParentSequenceNumber { get; set; }
     public string ParentPath { get; set; }
 
     public ulong UpdateSequenceNumber { get; set; }

@@ -9,7 +9,7 @@ public class MFTRecordOut
     public ushort SequenceNumber { get; set; }
 
     public uint ParentEntryNumber { get; set; }
-    public short? ParentSequenceNumber { get; set; }
+    public ushort? ParentSequenceNumber { get; set; }
 
     public bool InUse { get; set; }
     public string ParentPath { get; set; }
