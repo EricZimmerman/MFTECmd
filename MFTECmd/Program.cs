@@ -218,14 +218,12 @@ public class Program
 
         public string Format(string format, object arg, IFormatProvider formatProvider)
         {
-            if (arg is DateTimeOffset)
+            if (arg is DateTimeOffset size)
             {
-                var size = (DateTimeOffset)arg;
                 return size.ToString(_activeDateTimeFormat);
             }
 
-            var formattable = arg as IFormattable;
-            if (formattable != null)
+            if (arg is IFormattable formattable)
             {
                 return formattable.ToString(format, _innerFormatProvider);
             }
@@ -538,8 +536,6 @@ public class Program
         var dt = DateTimeOffset.UtcNow;
         
         Log.Information("$I30 contains {Active:N0} active and {Slack:N0} slack entries",i30.Entries.Count(t=>t.FromSlack == false),i30.Entries.Count(t=>t.FromSlack));
-        
-        StreamWriter swCsv;
 
         if (Directory.Exists(csv) == false)
         {
@@ -558,21 +554,18 @@ public class Program
             }
         }
 
-        string outName;
-        string outFile;
-        
-        outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$I30_Output.csv";
+        var outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$I30_Output.csv";
 
         if (csvf.IsNullOrEmpty() == false)
         {
             outName = Path.GetFileName(csvf);
         }
         
-        outFile = Path.Combine(csv, outName);
+        var outFile = Path.Combine(csv, outName);
 
         Log.Information("\tCSV output will be saved to {OutFile}",outFile);
 
-        swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+        var swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
         _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
         
@@ -830,7 +823,6 @@ public class Program
     {
         var sw = new Stopwatch();
         sw.Start();
-        Usn.Usn j;
 
         var jFiles = new Dictionary<string, Usn.Usn>();
 
@@ -838,6 +830,7 @@ public class Program
         {
             Log.Verbose("Initializing $J");
 
+            Usn.Usn j;
             try
             {
                 j = UsnFile.Load(f);
@@ -933,8 +926,6 @@ public class Program
 
                 if (csv.IsNullOrEmpty() == false)
                 {
-                    StreamWriter swCsv;
-
                     if (Directory.Exists(csv) == false)
                     {
                         Log.Information(
@@ -953,7 +944,6 @@ public class Program
                     }
 
                     string outName;
-                    string outFile;
 
                     if (jFile.Key.StartsWith("\\\\.\\"))
                     {
@@ -980,11 +970,11 @@ public class Program
                         }
                     }
 
-                    outFile = Path.Combine(csv, outName);
+                    var outFile = Path.Combine(csv, outName);
 
                     Log.Information("\tCSV output will be saved to {OutFile}",outFile);
 
-                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+                    var swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
                     _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
@@ -1069,7 +1059,6 @@ public class Program
                     if (json.IsNullOrEmpty() == false)
                     {
                         string outName;
-                        string outFile;
 
                         if (Directory.Exists(json) == false)
                         {
@@ -1113,7 +1102,7 @@ public class Program
                             }
                         }
 
-                        outFile = Path.Combine(json, outName);
+                        var outFile = Path.Combine(json, outName);
 
                         Log.Information("\tJSON output will be saved to {OutFile}",outFile);
 
@@ -1250,8 +1239,6 @@ public class Program
 
                 if (csv.IsNullOrEmpty() == false)
                 {
-                    StreamWriter swCsv;
-
                     if (Directory.Exists(csv) == false)
                     {
                         Log.Information(
@@ -1270,7 +1257,6 @@ public class Program
                     }
 
                     string outName;
-                    string outFile;
 
                     if (sdsFile.Key.StartsWith("\\\\.\\"))
                     {
@@ -1297,11 +1283,11 @@ public class Program
                         }
                     }
 
-                    outFile = Path.Combine(csv, outName);
+                    var outFile = Path.Combine(csv, outName);
 
                     Log.Information("\tCSV output will be saved to {OutFile}",outFile);
 
-                    swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
+                    var swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
 
                     _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
@@ -1605,7 +1591,6 @@ public class Program
                 }
 
                 string outName;
-                string outFile;
 
                 if (mftFile.Key.StartsWith("\\\\.\\"))
                 {
@@ -1632,7 +1617,7 @@ public class Program
                     }
                 }
 
-                outFile = Path.Combine(body, outName);
+                var outFile = Path.Combine(body, outName);
 
                 Log.Information("\tBodyfile output will be saved to {OutFile}",outFile);
 
@@ -1707,7 +1692,6 @@ public class Program
                     }
 
                     string outName;
-                    string outFile;
 
                     if (mftFile.Key.StartsWith("\\\\.\\"))
                     {
@@ -1734,7 +1718,7 @@ public class Program
                         }
                     }
 
-                    outFile = Path.Combine(csv, outName);
+                    var outFile = Path.Combine(csv, outName);
 
                     Log.Information("\tCSV output will be saved to {OutFile}",outFile);
 
@@ -1884,7 +1868,6 @@ public class Program
                 //write json
 
                 string outName;
-                string outFile;
 
                 if (Directory.Exists(json) == false)
                 {
@@ -1928,7 +1911,7 @@ public class Program
                     }
                 }
 
-                outFile = Path.Combine(json, outName);
+                var outFile = Path.Combine(json, outName);
 
                 Log.Information("\tJSON output will be saved to {OutFile}",outFile);
 
@@ -1983,7 +1966,7 @@ public class Program
             if (offsetOk)
             {
                 using var b = new BinaryReader(File.OpenRead(file));
-                b.BaseStream.Seek(offset * _mft.FileRecords.Values.First().AllocatedRecordSize, 0); // offset is the FILE entry, so we need to multiply it by the size of the record, typically 1024, but dont assume that 
+                b.BaseStream.Seek(offset * _mft.FileRecords.Values.First().AllocatedRecordSize, 0); // offset is the FILE entry, so we need to multiply it by the size of the record, typically 1024, but don't assume that 
 
                 var fileBytes = b.ReadBytes(1024);
 
@@ -2005,11 +1988,7 @@ public class Program
 
         #endregion
 
-        #region DumpResident
-
-   
-
-        #endregion
+  
 
         #region DumpEntry
 
@@ -2075,13 +2054,13 @@ public class Program
                 foreach (var f in ff)
                 {
                     FileRecord record = null;
-                    if (_mft.FileRecords.ContainsKey(f))
+                    if (_mft.FileRecords.TryGetValue(f, out var fileRecord))
                     {
-                        record = _mft.FileRecords[f];
+                        record = fileRecord;
                     }
-                    else if (_mft.FreeFileRecords.ContainsKey(f))
+                    else if (_mft.FreeFileRecords.TryGetValue(f, out var freeFileRecord))
                     {
-                        record = _mft.FreeFileRecords[f];
+                        record = freeFileRecord;
                     }
 
                     if (record != null)
@@ -2171,13 +2150,13 @@ public class Program
         }
 
 
-        if (_mft.FileRecords.ContainsKey(key))
+        if (_mft.FileRecords.TryGetValue(key, out var mftFileRecord))
         {
-            fr = _mft.FileRecords[key];
+            fr = mftFileRecord;
         }
-        else if (_mft.FreeFileRecords.ContainsKey(key))
+        else if (_mft.FreeFileRecords.TryGetValue(key, out var record))
         {
-            fr = _mft.FreeFileRecords[key];
+            fr = record;
         }
 
         if (fr == null)
@@ -2582,7 +2561,7 @@ public class Program
                                     Log.Information("  Format: {Format}",$"0x{lxa.Format:X}");
                                     Log.Information("  Version: {Version}",$"0x{lxa.Version:X}");
                                     Log.Information("  Mode: {Mode}",$"0x{lxa.Mode:X}");
-                                    Log.Information("  Uid/Gid: {U}/G}",$"0x{lxa.Uid:X}",$"0x{lxa.Gid:X}");
+                                    Log.Information("  Uid/Gid: {U}/{G}",$"0x{lxa.Uid:X}",$"0x{lxa.Gid:X}");
                                     Log.Information("  DeviceId: {DeviceId}",$"0x{lxa.DeviceId:X}");
                                     
                                     //convert to seconds so we can use it later.
