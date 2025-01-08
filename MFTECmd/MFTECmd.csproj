@@ -19,7 +19,7 @@
         <PackageReference Include="Costura.Fody" Version="6.0.0">
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="ERZHelpers" Version="1.5.0" />
+        <PackageReference Include="ERZHelpers" Version="1.5.1" />
         <PackageReference Include="Fody" Version="6.9.1">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
