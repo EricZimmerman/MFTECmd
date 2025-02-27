@@ -1812,6 +1812,7 @@ public class Program
                         foo.Map(t => t.ObjectIdFileDroid).Index(30);
                         foo.Map(t => t.LoggedUtilStream).Index(31);
                         foo.Map(t => t.ZoneIdContents).Index(32);
+                        foo.Map(t => t.SourceFile).Index(33);
 
                         foo.Map(t => t.FnAttributeId).Ignore();
                         foo.Map(t => t.OtherAttributeId).Ignore();
@@ -1844,8 +1845,8 @@ public class Program
                         }
                     }
                     
-                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir);
-                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir);
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key);
                 }
                 catch (Exception ex)
                 {
@@ -2790,7 +2791,7 @@ public class Program
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl,string drDumpDir)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath)
     {
         
         foreach (var fr in records)
@@ -2826,7 +2827,7 @@ public class Program
                     continue;
                 }
 
-                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp);
+                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath);
 
                 var ads = fr.Value.GetAlternateDataStreams();
 
@@ -2881,7 +2882,7 @@ public class Program
 
                 foreach (var adsInfo in ads)
                 {
-                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp);
+                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath);
                     adsRecord.IsAds = true;
                     adsRecord.OtherAttributeId = adsInfo.AttributeId;
                     _csvWriter?.WriteRecord(adsRecord);
@@ -3015,7 +3016,7 @@ public class Program
         return b;
     }
 
-    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp)
+    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp, string mftFilePath)
     {
         var mftr = new MFTRecordOut
         {
@@ -3028,7 +3029,8 @@ public class Program
             ParentEntryNumber = fn.FileInfo.ParentMftRecord.MftEntryNumber,
             ParentSequenceNumber = fn.FileInfo.ParentMftRecord.MftSequenceNumber,
             NameType = fn.FileInfo.NameType,
-            FnAttributeId = fn.AttributeNumber
+            FnAttributeId = fn.AttributeNumber,
+            SourceFile = mftFilePath
         };
 
         if (mftr.IsDirectory == false)
