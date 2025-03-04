@@ -134,7 +134,7 @@ public class Program
 
             new Option<bool>(
                 "--dr",
-                "When true, dump $MFT resident files to dir specified by --csv or --json, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>_<FileName>.bin'"),
+                "When true, dump $MFT resident files to dir specified by --csv or --json, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>-<AttributeNumber>_<FileName>.bin'"),
 
             new Option<bool>(
                 "--fls",
@@ -2842,8 +2842,7 @@ public class Program
                             continue;
                         }
 
-                        string daNameSuffix = string.IsNullOrEmpty(da.Name) ? da.Name : ":" + da.Name;
-                        var outNameR = Path.Combine(drDumpDir, $"{fr.Value.EntryNumber}-{fr.Value.SequenceNumber}-{fn.FileInfo.FileName}{daNameSuffix}.bin");
+                        var outNameR = Path.Combine(drDumpDir, $"{fr.Value.EntryNumber}-{fr.Value.SequenceNumber}-{da.AttributeNumber}_{fn.FileInfo.FileName}.bin");
                         
                         Log.Debug("Saving resident data for {Entry}-{Seq} to {File}",fr.Value.EntryNumber,fr.Value.SequenceNumber,outNameR);
                         
