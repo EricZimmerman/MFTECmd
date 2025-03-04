@@ -2842,7 +2842,8 @@ public class Program
                             continue;
                         }
 
-                        var outNameR = Path.Combine(drDumpDir, $"{fr.Value.EntryNumber}-{fr.Value.SequenceNumber}_{fn.FileInfo.FileName}.bin");
+                        string daNameSuffix = string.IsNullOrEmpty(da.Name) ? da.Name : ":" + da.Name;
+                        var outNameR = Path.Combine(drDumpDir, $"{fr.Value.EntryNumber}-{fr.Value.SequenceNumber}-{fn.FileInfo.FileName}{daNameSuffix}.bin");
                         
                         Log.Debug("Saving resident data for {Entry}-{Seq} to {File}",fr.Value.EntryNumber,fr.Value.SequenceNumber,outNameR);
                         
