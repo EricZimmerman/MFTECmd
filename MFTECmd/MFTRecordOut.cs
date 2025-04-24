@@ -54,6 +54,7 @@ public class MFTRecordOut
 
     public int FnAttributeId { get; set; }
     public int OtherAttributeId { get; set; }
+    public string SourceFile { get; set; }
 }
 
 public class FileListEntry
