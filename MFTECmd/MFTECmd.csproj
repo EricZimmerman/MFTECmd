@@ -20,7 +20,7 @@
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="ERZHelpers" Version="1.5.3" />
-        <PackageReference Include="Fody" Version="6.9.1">
+        <PackageReference Include="Fody" Version="6.9.2">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
