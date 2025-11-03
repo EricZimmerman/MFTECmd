@@ -188,7 +188,21 @@ public class Program
             new Option<bool>(
                 "--trace",
                 () => false,
-                "Show trace information during processing")
+                "Show trace information during processing"),
+
+            new Option<bool>(
+                "--ir",
+                () => false,
+                "Include resident data in JSON/CSV output"),
+
+            new Option<string>(
+                "--re",
+                "Comma-separated list of extensions to include for resident data (e.g., '.txt,.ps1,.bat'). If omitted, includes all"),
+
+            new Option<int>(
+                "--rm",
+                () => 4096,
+                "Maximum size in bytes for resident data to include (default: 4096, max: 1024000)")
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
@@ -232,7 +246,7 @@ public class Program
         }
     }
     
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -432,7 +446,7 @@ public class Program
                     drDir = Path.Combine(residentDirBase, "Resident");
                 }
 
-                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir);
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir, ir, re, rm);
                 break;
             case FileType.LogFile:
                 Log.Warning("$LogFile not supported yet. Exiting");
@@ -475,7 +489,7 @@ public class Program
                         drDir2 = $"{residentDirBase}\\Resident";
                     }
 
-                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2);
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -1465,7 +1479,7 @@ public class Program
 
     
     
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, bool includeResident, string residentExt, int residentMaxSize)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1845,8 +1859,8 @@ public class Program
                         }
                     }
                     
-                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key);
-                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key);
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize);
                 }
                 catch (Exception ex)
                 {
@@ -2791,7 +2805,7 @@ public class Program
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, bool includeResident, string residentExt, int residentMaxSize)
     {
         
         foreach (var fr in records)
@@ -2827,7 +2841,7 @@ public class Program
                     continue;
                 }
 
-                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath);
+                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
 
                 var ads = fr.Value.GetAlternateDataStreams();
 
@@ -2882,7 +2896,7 @@ public class Program
 
                 foreach (var adsInfo in ads)
                 {
-                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath);
+                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
                     adsRecord.IsAds = true;
                     adsRecord.OtherAttributeId = adsInfo.AttributeId;
                     _csvWriter?.WriteRecord(adsRecord);
@@ -3016,7 +3030,60 @@ public class Program
         return b;
     }
 
-    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp, string mftFilePath)
+    private static void PopulateResidentData(MFTRecordOut mftr, FileRecord fr, string residentExt, int residentMaxSize)
+    {
+        if (mftr.FileSize > (ulong)residentMaxSize)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(residentExt))
+        {
+            var allowedExtensions = new HashSet<string>(
+                residentExt.Split(',').Select(e => e.Trim().ToLowerInvariant()),
+                StringComparer.OrdinalIgnoreCase
+            );
+
+            if (!string.IsNullOrEmpty(mftr.Extension) && 
+                !allowedExtensions.Contains(mftr.Extension.ToLowerInvariant()))
+            {
+                return;
+            }
+        }
+
+        var dataAttrs = fr.Attributes.Where(t => 
+            t.AttributeType == AttributeType.Data && t.IsResident).ToList();
+
+        foreach (var attr in dataAttrs)
+        {
+            var dataAttr = attr as Data;
+            if (dataAttr?.ResidentData?.Data != null)
+            {
+                var data = dataAttr.ResidentData.Data;
+
+                mftr.ResidentDataBase64 = Convert.ToBase64String(data);
+
+                mftr.ResidentDataHex = BitConverter.ToString(data);
+
+                try
+                {
+                    var text = Encoding.UTF8.GetString(data);
+                    if (text.All(c => char.IsControl(c) || char.IsWhiteSpace(c) || 
+                        (c >= 32 && c <= 126) || c == '\r' || c == '\n' || c == '\t'))
+                    {
+                        mftr.ResidentDataASCII = text;
+                    }
+                }
+                catch
+                {
+                }
+
+                break;
+            }
+        }
+    }
+
+    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp, string mftFilePath, bool includeResident, string residentExt, int residentMaxSize)
     {
         var mftr = new MFTRecordOut
         {
@@ -3157,6 +3224,11 @@ public class Program
             mftr.LastModified0x10 = fn.FileInfo.ContentModifiedOn;
             mftr.LastRecordChange0x10 = fn.FileInfo.RecordModifiedOn;
             mftr.LastAccess0x10 = fn.FileInfo.LastAccessedOn;
+        }
+
+        if (includeResident && adsinfo == null)
+        {
+            PopulateResidentData(mftr, fr, residentExt, residentMaxSize);
         }
 
         return mftr;
