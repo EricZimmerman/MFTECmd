@@ -36,8 +36,6 @@ public class MFTRecordOut
 
     public DateTimeOffset? LastAccess0x30 { get; set; }
 
-    public DateTimeOffset? SrhType { get; set; }
-
     public long UpdateSequenceNumber { get; set; }
     public long LogfileSequenceNumber { get; set; }
 
@@ -58,7 +56,6 @@ public class MFTRecordOut
     public int OtherAttributeId { get; set; }
     public string SourceFile { get; set; }
     
-    public DateTimeOffset? SrhMode { get; set; }
 }
 
 public class FileListEntry
