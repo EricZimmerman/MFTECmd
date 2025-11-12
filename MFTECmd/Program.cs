@@ -197,9 +197,6 @@ public class Program
                 "Cutoff date to filter entries (entries prior to this date will be excluded)"
              ),
 
-            new Option<string>(
-                "--faction",
-                "cutoff search type by modified, created, deleted or all.  deleted searches by recordmodified. all is modified&created together"),
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
@@ -243,7 +240,7 @@ public class Program
         }
     }
     
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, DateTime? cutoff, string faction)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, DateTime? cutoff)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -356,16 +353,6 @@ public class Program
             }
         }
 
-        if (!string.IsNullOrEmpty(faction) &&
-            faction != "created" &&
-            faction != "modified" &&
-            faction != "deleted" &&
-            faction != "all")
-        {
-            Log.Warning("Invalid faction '{Faction}' specified. Must be either: created or modified or deleted.", faction);
-            return;
-        }
-
         switch (ft)
         {
             case FileType.I30:
@@ -452,7 +439,7 @@ public class Program
                     drDir = Path.Combine(residentDirBase, "Resident");
                 }
 
-                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir, cutoff, faction);
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir, cutoff);
                 break;
             case FileType.LogFile:
                 Log.Warning("$LogFile not supported yet. Exiting");
@@ -495,7 +482,7 @@ public class Program
                         drDir2 = $"{residentDirBase}\\Resident";
                     }
 
-                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2, cutoff, faction);
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2, cutoff);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -1485,7 +1472,7 @@ public class Program
 
     
     
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, DateTime? cutoff, string faction)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, DateTime? cutoff)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1771,9 +1758,14 @@ public class Program
 
                     try
                     {
-                        //swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
-
-                        swCsv = new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8) { AutoFlush = true };
+                        if (!cutoff.HasValue)
+                        {
+                            swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
+                        }
+                        else
+                        {
+                            swCsv = new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8) { AutoFlush = true };
+                        }
                         _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
                         var foo = _csvWriter.Context.AutoMap<MFTRecordOut>();
@@ -1867,8 +1859,8 @@ public class Program
                         }
                     }
                     
-                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff, faction);
-                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff, faction);
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff);
                 }
                 catch (Exception ex)
                 {
@@ -2813,7 +2805,7 @@ public class Program
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, DateTime? cutoff, string faction)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, DateTime? cutoff)
     {
 
         //if (cutoff.HasValue && mftr.LastModified0x10.HasValue &&
@@ -2858,7 +2850,7 @@ public class Program
                     continue;
                 }
                
-                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath, faction);
+                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath);
                 
                 var ads = fr.Value.GetAlternateDataStreams();
 
@@ -2885,102 +2877,69 @@ public class Program
 
                 mftr.HasAds = ads.Any();
 
-                bool isSkipped = false;
-                bool modifiedOld = false;
-                bool createdOld = false;
+                // note
+                //mftr.Created0x10.HasValue & mftr.Created0x10.Value < cutoff.Value
 
-                if (cutoff.HasValue)
-                {
-                    if (mftr.SrhMode.HasValue)
-                    {
-                        createdOld = mftr.SrhType.HasValue && mftr.SrhType.Value < cutoff.Value;
-                        modifiedOld = mftr.SrhMode.HasValue && mftr.SrhMode.Value < cutoff.Value;
-
-                        if (createdOld && modifiedOld)
-                        {
-                            isSkipped = true;
-                            Console.WriteLine("[SKIPPED]");
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        if (mftr.SrhType.HasValue && mftr.SrhType.Value < cutoff.Value)
-                        {
-                            isSkipped = true;
-                            Console.WriteLine("[SKIPPED]");
-                            continue;
-                        }
-                    }
-                }
-
-                //if (cutoff.HasValue && mftr.LastModified0x10.HasValue &&
-                //    mftr.LastModified0x10.Value < cutoff.Value)
-                //{
-                //    continue;
-                //}
                 //if (cutoff.HasValue && mftr.LastModified0x10.HasValue &&
                 //    mftr.LastModified0x10.Value < cutoff.Value)
                 //{
                 //    isSkipped = true;
                 //    Console.WriteLine("[SKIPPED]");
-                //    continue;
+                //    _csvWriter?.NextRecord();
                 //}
-                else
+                //else
+                //{
+                //    _csvWriter?.WriteRecord(mftr);
+                //}
+
+                _csvWriter?.WriteRecord(mftr);
+                _mftOutRecords?.Add(mftr);
+                _csvWriter?.NextRecord();
+
+
+                if (_fileListWriter != null)
                 {
+                    _fileListWriter.WriteRecord(new FileListEntry(mftr));
+                    _fileListWriter.NextRecord();
+                }
 
-                    _csvWriter?.WriteRecord(mftr);
+                if (_bodyWriter != null)
+                {
+                    var f = GetBodyData(mftr, true, bdl);
 
-                    _mftOutRecords?.Add(mftr);
+                    _bodyWriter.WriteRecord(f);
+                    _bodyWriter.NextRecord();
 
+                    f = GetBodyData(mftr, false, bdl);
+
+                    _bodyWriter.WriteRecord(f);
+                    _bodyWriter.NextRecord();
+                }
+
+                foreach (var adsInfo in ads)
+                {
+                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath);
+                    adsRecord.IsAds = true;
+                    adsRecord.OtherAttributeId = adsInfo.AttributeId;
+
+
+                    _csvWriter?.WriteRecord(adsRecord);
+                    _mftOutRecords?.Add(adsRecord);
                     _csvWriter?.NextRecord();
+
 
                     if (_fileListWriter != null)
                     {
-                        _fileListWriter.WriteRecord(new FileListEntry(mftr));
+                        _fileListWriter.WriteRecord(new FileListEntry(adsRecord));
                         _fileListWriter.NextRecord();
                     }
 
                     if (_bodyWriter != null)
                     {
-                        var f = GetBodyData(mftr, true, bdl);
+                        var f1 = GetBodyData(adsRecord, true, bdl);
 
-                        _bodyWriter.WriteRecord(f);
+                        _bodyWriter.WriteRecord(f1);
                         _bodyWriter.NextRecord();
-
-                        f = GetBodyData(mftr, false, bdl);
-
-                        _bodyWriter.WriteRecord(f);
-                        _bodyWriter.NextRecord();
-                    }
-                }
-                foreach (var adsInfo in ads)
-                {
-                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, faction);
-                    adsRecord.IsAds = true;
-                    adsRecord.OtherAttributeId = adsInfo.AttributeId;
-
-                    if (!isSkipped)
-                    {
-                        _csvWriter?.WriteRecord(adsRecord);
-
-                        _mftOutRecords?.Add(adsRecord);
-
-                        _csvWriter?.NextRecord();
-
-                        if (_fileListWriter != null)
-                        {
-                            _fileListWriter.WriteRecord(new FileListEntry(adsRecord));
-                            _fileListWriter.NextRecord();
-                        }
-
-                        if (_bodyWriter != null)
-                        {
-                            var f1 = GetBodyData(adsRecord, true, bdl);
-
-                            _bodyWriter.WriteRecord(f1);
-                            _bodyWriter.NextRecord();
-                        }
                     }
                 }
             }
@@ -3094,7 +3053,7 @@ public class Program
         return b;
     }
 
-    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp, string mftFilePath, string faction)
+    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp, string mftFilePath)
     {
         var mftr = new MFTRecordOut
         {
@@ -3109,14 +3068,6 @@ public class Program
             NameType = fn.FileInfo.NameType,
             FnAttributeId = fn.AttributeNumber,
             SourceFile = mftFilePath,
-            SrhType = faction == "created"  ? fn.FileInfo.CreatedOn :
-                      faction == "modified" ? fn.FileInfo.ContentModifiedOn :
-                      faction == "deleted"  ? fn.FileInfo.RecordModifiedOn :
-                      faction == "all"      ? fn.FileInfo.CreatedOn :
-                      (DateTime?)null,
-
-
-            SrhMode = faction == "all" ? fn.FileInfo.ContentModifiedOn : (DateTime?)null
         };
 
         if (mftr.IsDirectory == false)
