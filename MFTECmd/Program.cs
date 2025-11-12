@@ -29,6 +29,7 @@ using Serilog.Events;
 using ServiceStack;
 using ServiceStack.Text;
 using Usn;
+using static System.Collections.Specialized.BitVector32;
 using Attribute = MFT.Attributes.Attribute;
 using CsvWriter = CsvHelper.CsvWriter;
 
@@ -188,7 +189,14 @@ public class Program
             new Option<bool>(
                 "--trace",
                 () => false,
-                "Show trace information during processing")
+                "Show trace information during processing"),
+
+            new Option<DateTime?>(
+                "--cutoff",
+                () => null,
+                "Cutoff date to filter entries (entries prior to this date will be excluded)"
+             ),
+
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
@@ -232,7 +240,7 @@ public class Program
         }
     }
     
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, DateTime? cutoff)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -345,7 +353,6 @@ public class Program
             }
         }
 
-
         switch (ft)
         {
             case FileType.I30:
@@ -432,7 +439,7 @@ public class Program
                     drDir = Path.Combine(residentDirBase, "Resident");
                 }
 
-                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir);
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir, cutoff);
                 break;
             case FileType.LogFile:
                 Log.Warning("$LogFile not supported yet. Exiting");
@@ -475,7 +482,7 @@ public class Program
                         drDir2 = $"{residentDirBase}\\Resident";
                     }
 
-                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2);
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2, cutoff);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -1465,7 +1472,7 @@ public class Program
 
     
     
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, DateTime? cutoff)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1562,6 +1569,7 @@ public class Program
 
         foreach (var mftFile in mftFiles)
         {
+            
             Log.Information(
                 "{Key}: FILE records found: {FileRecordsCount:N0} (Free records: {FreeFileRecordsCount:N0}) File size: {FileSize}",mftFile.Key,mftFile.Value.FileRecords.Count,mftFile.Value.FreeFileRecords.Count,Helper.BytesToSizeAsString(mftFile.Value.FileSize));
 
@@ -1750,8 +1758,14 @@ public class Program
 
                     try
                     {
-                        swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
-
+                        if (!cutoff.HasValue)
+                        {
+                            swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
+                        }
+                        else
+                        {
+                            swCsv = new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8) { AutoFlush = true };
+                        }
                         _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
                         var foo = _csvWriter.Context.AutoMap<MFTRecordOut>();
@@ -1845,8 +1859,8 @@ public class Program
                         }
                     }
                     
-                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key);
-                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key);
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff);
                 }
                 catch (Exception ex)
                 {
@@ -2791,9 +2805,18 @@ public class Program
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, DateTime? cutoff)
     {
-        
+
+        //if (cutoff.HasValue && mftr.LastModified0x10.HasValue &&
+        //    mftr.LastModified0x10.Value < cutoff.Value)
+        //{
+        //    isSkipped = true;
+        //    Console.WriteLine("[SKIPPED]");
+        //    continue;
+        //}
+
+
         foreach (var fr in records)
         {
             Log.Verbose(
@@ -2826,9 +2849,9 @@ public class Program
                 {
                     continue;
                 }
-
+               
                 var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath);
-
+                
                 var ads = fr.Value.GetAlternateDataStreams();
 
                 if (drDumpDir.IsNullOrEmpty() == false)
@@ -2854,11 +2877,25 @@ public class Program
 
                 mftr.HasAds = ads.Any();
 
+                // note
+                //mftr.Created0x10.HasValue & mftr.Created0x10.Value < cutoff.Value
+
+                //if (cutoff.HasValue && mftr.LastModified0x10.HasValue &&
+                //    mftr.LastModified0x10.Value < cutoff.Value)
+                //{
+                //    isSkipped = true;
+                //    Console.WriteLine("[SKIPPED]");
+                //    _csvWriter?.NextRecord();
+                //}
+                //else
+                //{
+                //    _csvWriter?.WriteRecord(mftr);
+                //}
+
                 _csvWriter?.WriteRecord(mftr);
-
                 _mftOutRecords?.Add(mftr);
-
                 _csvWriter?.NextRecord();
+
 
                 if (_fileListWriter != null)
                 {
@@ -2879,17 +2916,17 @@ public class Program
                     _bodyWriter.NextRecord();
                 }
 
-
                 foreach (var adsInfo in ads)
                 {
                     var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath);
                     adsRecord.IsAds = true;
                     adsRecord.OtherAttributeId = adsInfo.AttributeId;
+
+
                     _csvWriter?.WriteRecord(adsRecord);
-
                     _mftOutRecords?.Add(adsRecord);
-
                     _csvWriter?.NextRecord();
+
 
                     if (_fileListWriter != null)
                     {
@@ -3030,7 +3067,7 @@ public class Program
             ParentSequenceNumber = fn.FileInfo.ParentMftRecord.MftSequenceNumber,
             NameType = fn.FileInfo.NameType,
             FnAttributeId = fn.AttributeNumber,
-            SourceFile = mftFilePath
+            SourceFile = mftFilePath,
         };
 
         if (mftr.IsDirectory == false)
