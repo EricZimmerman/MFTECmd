@@ -201,8 +201,8 @@ public class Program
 
             new Option<int>(
                 "--rm",
-                () => 4096,
-                "Maximum size in bytes for resident data to include (default: 4096, max: 1024000)")
+                () => 1024,
+                "Maximum size in bytes for resident data to include (default: 1024, max: 1024000)")
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
