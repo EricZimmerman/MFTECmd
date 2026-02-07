@@ -2711,7 +2711,7 @@ public class Program
                 {
                     var rawFiles = Helper.GetRawFiles(ll);
 
-                    rawFiles.First().FileStream.Read(buff, 0, 50);
+                    rawFiles.First().FileStream.ReadExactly(buff, 0, 50);
                 }
                 catch (Exception e)
                 {
