@@ -55,6 +55,10 @@ public class MFTRecordOut
     public int FnAttributeId { get; set; }
     public int OtherAttributeId { get; set; }
     public string SourceFile { get; set; }
+
+    public string ResidentDataBase64 { get; set; }
+    public string ResidentDataHex { get; set; }
+    public string ResidentDataASCII { get; set; }
 }
 
 public class FileListEntry
