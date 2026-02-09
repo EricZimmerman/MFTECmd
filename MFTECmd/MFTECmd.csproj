@@ -32,8 +32,8 @@
         <PackageReference Include="Exceptionless" Version="6.1.0" />
         <PackageReference Include="Secure" Version="1.5.1" />
         <PackageReference Include="ServiceStack.Text" Version="10.0.4" />
-        <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
-        <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta4.22272.1" />
+        <PackageReference Include="System.CommandLine" Version="2.0.0-beta5.25306.1" />
+        <PackageReference Include="System.CommandLine.NamingConventionBinder" Version="2.0.0-beta5.25306.1" />
         <PackageReference Include="System.Net.Http" Version="4.3.4" />
         <PackageReference Include="System.Private.Uri" Version="4.3.2" />
         <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
