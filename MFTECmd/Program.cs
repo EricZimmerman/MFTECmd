@@ -29,8 +29,6 @@ using Serilog.Events;
 using ServiceStack;
 using ServiceStack.Text;
 using Usn;
-using static System.Collections.Specialized.BitVector32;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 using Attribute = MFT.Attributes.Attribute;
 using CsvWriter = CsvHelper.CsvWriter;
 
@@ -192,12 +190,25 @@ public class Program
                 () => false,
                 "Show trace information during processing"),
 
+            new Option<bool>(
+                "--ir",
+                () => false,
+                "Include resident data in JSON/CSV output"),
+
+            new Option<string>(
+                "--re",
+                "Comma-separated list of extensions to include for resident data (e.g., '.txt,.ps1,.bat'). If omitted, includes all"),
+
+            new Option<int>(
+                "--rm",
+                () => 1024,
+                "Maximum size in bytes for resident data to include (default: 1024, max: 1024000)"),
+
             new Option<DateTimeOffset?>(
                 "--cutoff",
                 () => null,
                 "Cutoff date to filter entries (entries prior to this date will be excluded)"
              ),
-
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
@@ -241,7 +252,7 @@ public class Program
         }
     }
     
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, DateTimeOffset? cutoff)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm, DateTimeOffset? cutoff)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -445,7 +456,7 @@ public class Program
                     drDir = Path.Combine(residentDirBase, "Resident");
                 }
 
-                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir, cutoff);
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir, ir, re, rm, cutoff);
                 break;
             case FileType.LogFile:
                 Log.Warning("$LogFile not supported yet. Exiting");
@@ -488,7 +499,7 @@ public class Program
                         drDir2 = $"{residentDirBase}\\Resident";
                     }
 
-                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de,rs,drDir2, cutoff);
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm, cutoff);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -1478,7 +1489,7 @@ public class Program
 
     
     
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, DateTimeOffset? cutoff)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, bool includeResident, string residentExt, int residentMaxSize, DateTimeOffset? cutoff)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1575,7 +1586,6 @@ public class Program
 
         foreach (var mftFile in mftFiles)
         {
-            
             Log.Information(
                 "{Key}: FILE records found: {FileRecordsCount:N0} (Free records: {FreeFileRecordsCount:N0}) File size: {FileSize}",mftFile.Key,mftFile.Value.FileRecords.Count,mftFile.Value.FreeFileRecords.Count,Helper.BytesToSizeAsString(mftFile.Value.FileSize));
 
@@ -1772,6 +1782,7 @@ public class Program
                         {
                             swCsv = new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8) { AutoFlush = true };
                         }
+
                         _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
                         var foo = _csvWriter.Context.AutoMap<MFTRecordOut>();
@@ -1865,8 +1876,8 @@ public class Program
                         }
                     }
                     
-                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff);
-                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, cutoff);
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize, cutoff);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize, cutoff);
                 }
                 catch (Exception ex)
                 {
@@ -2717,7 +2728,7 @@ public class Program
                 {
                     var rawFiles = Helper.GetRawFiles(ll);
 
-                    rawFiles.First().FileStream.Read(buff, 0, 50);
+                    rawFiles.First().FileStream.ReadExactly(buff, 0, 50);
                 }
                 catch (Exception e)
                 {
@@ -2811,9 +2822,9 @@ public class Program
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, DateTimeOffset? cutoff)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, bool includeResident, string residentExt, int residentMaxSize, DateTimeOffset? cutoff)
     {
-
+        
         foreach (var fr in records)
         {
             Log.Verbose(
@@ -2846,9 +2857,9 @@ public class Program
                 {
                     continue;
                 }
-               
-                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath);
-                
+
+                var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
+
                 var ads = fr.Value.GetAlternateDataStreams();
 
                 if (drDumpDir.IsNullOrEmpty() == false)
@@ -2873,8 +2884,7 @@ public class Program
                 
 
                 mftr.HasAds = ads.Any();
-
-                if (cutoff.HasValue) 
+                if (cutoff.HasValue)
                 {
                     //if (mftr.LastModified0x10.HasValue)
                     //{
@@ -2891,9 +2901,10 @@ public class Program
                     )
                     {
                         _csvWriter?.WriteRecord(mftr);
-                        _mftOutRecords?.Add(mftr);
-                        _csvWriter?.NextRecord();
 
+                        _mftOutRecords?.Add(mftr);
+
+                        _csvWriter?.NextRecord();
 
                         if (_fileListWriter != null)
                         {
@@ -2914,17 +2925,17 @@ public class Program
                             _bodyWriter.NextRecord();
                         }
 
+
                         foreach (var adsInfo in ads)
                         {
-                            var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath);
+                            var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
                             adsRecord.IsAds = true;
                             adsRecord.OtherAttributeId = adsInfo.AttributeId;
-
-
                             _csvWriter?.WriteRecord(adsRecord);
-                            _mftOutRecords?.Add(adsRecord);
-                            _csvWriter?.NextRecord();
 
+                            _mftOutRecords?.Add(adsRecord);
+
+                            _csvWriter?.NextRecord();
 
                             if (_fileListWriter != null)
                             {
@@ -2945,9 +2956,10 @@ public class Program
                 else
                 {
                     _csvWriter?.WriteRecord(mftr);
-                    _mftOutRecords?.Add(mftr);
-                    _csvWriter?.NextRecord();
 
+                    _mftOutRecords?.Add(mftr);
+
+                    _csvWriter?.NextRecord();
 
                     if (_fileListWriter != null)
                     {
@@ -2968,17 +2980,17 @@ public class Program
                         _bodyWriter.NextRecord();
                     }
 
+
                     foreach (var adsInfo in ads)
                     {
-                        var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath);
+                        var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
                         adsRecord.IsAds = true;
                         adsRecord.OtherAttributeId = adsInfo.AttributeId;
-
-
                         _csvWriter?.WriteRecord(adsRecord);
-                        _mftOutRecords?.Add(adsRecord);
-                        _csvWriter?.NextRecord();
 
+                        _mftOutRecords?.Add(adsRecord);
+
+                        _csvWriter?.NextRecord();
 
                         if (_fileListWriter != null)
                         {
@@ -3106,7 +3118,60 @@ public class Program
         return b;
     }
 
-    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp, string mftFilePath)
+    private static void PopulateResidentData(MFTRecordOut mftr, FileRecord fr, string residentExt, int residentMaxSize)
+    {
+        if (mftr.FileSize > (ulong)residentMaxSize)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(residentExt))
+        {
+            var allowedExtensions = new HashSet<string>(
+                residentExt.Split(',').Select(e => e.Trim().ToLowerInvariant()),
+                StringComparer.OrdinalIgnoreCase
+            );
+
+            if (!string.IsNullOrEmpty(mftr.Extension) && 
+                !allowedExtensions.Contains(mftr.Extension.ToLowerInvariant()))
+            {
+                return;
+            }
+        }
+
+        var dataAttrs = fr.Attributes.Where(t => 
+            t.AttributeType == AttributeType.Data && t.IsResident).ToList();
+
+        foreach (var attr in dataAttrs)
+        {
+            var dataAttr = attr as Data;
+            if (dataAttr?.ResidentData?.Data != null)
+            {
+                var data = dataAttr.ResidentData.Data;
+
+                mftr.ResidentDataBase64 = Convert.ToBase64String(data);
+
+                mftr.ResidentDataHex = BitConverter.ToString(data);
+
+                try
+                {
+                    var text = Encoding.UTF8.GetString(data);
+                    if (text.All(c => char.IsControl(c) || char.IsWhiteSpace(c) || 
+                        (c >= 32 && c <= 126) || c == '\r' || c == '\n' || c == '\t'))
+                    {
+                        mftr.ResidentDataASCII = text;
+                    }
+                }
+                catch
+                {
+                }
+
+                break;
+            }
+        }
+    }
+
+    public static MFTRecordOut GetCsvData(FileRecord fr, FileName fn, AdsInfo adsinfo, bool alltimestamp, string mftFilePath, bool includeResident, string residentExt, int residentMaxSize)
     {
         var mftr = new MFTRecordOut
         {
@@ -3120,7 +3185,7 @@ public class Program
             ParentSequenceNumber = fn.FileInfo.ParentMftRecord.MftSequenceNumber,
             NameType = fn.FileInfo.NameType,
             FnAttributeId = fn.AttributeNumber,
-            SourceFile = mftFilePath,
+            SourceFile = mftFilePath
         };
 
         if (mftr.IsDirectory == false)
@@ -3247,6 +3312,11 @@ public class Program
             mftr.LastModified0x10 = fn.FileInfo.ContentModifiedOn;
             mftr.LastRecordChange0x10 = fn.FileInfo.RecordModifiedOn;
             mftr.LastAccess0x10 = fn.FileInfo.LastAccessedOn;
+        }
+
+        if (includeResident && adsinfo == null)
+        {
+            PopulateResidentData(mftr, fr, residentExt, residentMaxSize);
         }
 
         return mftr;
