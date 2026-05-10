@@ -78,7 +78,7 @@ public class Program
 
         var fOpt = new Option<string>("-f")
         {
-            Description = "File to process. Either this or -d is required"
+            Description = "File to process ($MFT | $J | $Boot | $SDS | $I30). Required"
         };
         
         var mOpt = new Option<string>("-m")
@@ -88,7 +88,7 @@ public class Program
         var csvOpt = new Option<string>(
             "--csv")
         {
-            Description = "Directory to save CSV formatted results to. Be sure to include the full path in double quotes"
+            Description = "Directory to save CSV formatted results to. Be sure to include the full path in double quotes. This or --json required unless --de or --body is specified"
         
         };
 
@@ -101,7 +101,7 @@ public class Program
         var jsonOpt = new Option<string>(
             "--json")
         {
-            Description = "Directory to save JSON formatted results to. Be sure to include the full path in double quotes"
+            Description = "Directory to save JSON formatted results to. Be sure to include the full path in double quotes. This or --csv required unless --de or --body is specified"
         
         };
 
@@ -152,7 +152,7 @@ public class Program
             Description   = "Dump full details for $MFT entry/sequence #. Format is 'Entry' or 'Entry-Seq' as decimal or hex. Example: 5, 624-5 or 0x270-0x5."
         };
         var drOpt = new Option<bool>(
-            "--d")
+            "--dr")
         {
             Description   = "When true, dump $MFT resident files to dir specified by --csv or --json, in 'Resident' subdirectory. Files will be named '<EntryNumber>-<SequenceNumber>-<AttributeNumber>_<FileName>.bin'"
         };
@@ -202,12 +202,12 @@ public class Program
         
         var vssOpt = new Option<bool>("--vss")
         {
-            Description = "Process all Volume Shadow Copies that exist on drive specified by -f or -d",
+            Description = "Process all Volume Shadow Copies that exist on drive specified by -f",
             DefaultValueFactory = _ => false
         };
         var dedupeOpt = new Option<bool>("--dedupe")
         {
-            Description = "Deduplicate -f or -d & VSCs based on SHA-1. First file found wins",
+            Description = "Deduplicate -f & VSCs based on SHA-1. First file found wins",
             DefaultValueFactory = _ => false
         };
         
