@@ -240,7 +240,12 @@ public class Program
             Description = "Show trace information during processing",
             DefaultValueFactory = _ => false
         };
-
+        var cutoffOpt = new Option<DateTimeOffset?>(
+            "--cutoff")
+        {
+            Description = "Cutoff date to filter entries (entries prior to this date will be excluded)",
+            DefaultValueFactory = _ => null
+        };
         _rootCommand = new RootCommand
         {
            fOpt,
@@ -272,6 +277,7 @@ public class Program
            rmOpt,
            debugOpt,
            traceOpt,
+           cutoffOpt,
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
@@ -281,7 +287,7 @@ public class Program
             result.GetValue(bodyfOpt),result.GetValue(bdlOpt),result.GetValue(blfOpt),result.GetValue(ddOpt),result.GetValue(doOpt),
             result.GetValue(deOpt),result.GetValue(drOpt),result.GetValue(flsOpt),result.GetValue(dsOpt),result.GetValue(dtOpt),result.GetValue(snOpt),
             result.GetValue(flOpt),result.GetValue(atOpt),result.GetValue(rsOpt),result.GetValue(vssOpt),result.GetValue(dedupeOpt),
-            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt)));
+            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(cutoffOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt)));
             
         var foo = _rootCommand.Parse(args).InvokeAsync();
         
@@ -320,7 +326,7 @@ public class Program
         }
     }
     
-    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm)
+    private static void DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, DateTimeOffset? cutoff, bool ir, string re, int rm)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -430,6 +436,10 @@ public class Program
             }
         }
 
+        if (cutoff.HasValue)
+        {
+            cutoff = cutoff.Value.ToUniversalTime();
+        }
 
         switch (ft)
         {
@@ -505,7 +515,7 @@ public class Program
                     drDir = Path.Combine(residentDirBase, "Resident");
                 }
 
-                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir, ir, re, rm);
+                ProcessMft(f, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir, ir, re, rm, cutoff);
                 break;
             case FileType.LogFile:
                 Log.Warning("$LogFile not supported yet. Exiting");
@@ -545,7 +555,7 @@ public class Program
                         drDir2 = $"{residentDirBase}\\Resident";
                     }
 
-                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm);
+                    ProcessMft(m, vss, dedupe, body, bdl, bodyf, blf, csv, csvf, json, jsonf, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm, cutoff);
                 }
 
                 ProcessJ(f, vss, dedupe, csv, csvf, json, jsonf, dt);
@@ -1532,7 +1542,7 @@ public class Program
 
     
     
-    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, bool includeResident, string residentExt, int residentMaxSize)
+    private static void ProcessMft(string file, bool vss, bool dedupe, string body, string bdl, string bodyf, bool blf, string csv, string csvf, string json, string jsonf, bool fl, string dt, string dd, string @do, bool fls, bool includeShort, bool alltimestamp, string de, bool rs, string drDir, bool includeResident, string residentExt, int residentMaxSize, DateTimeOffset? cutoff)
     {
         var mftFiles = new Dictionary<string, Mft>();
 
@@ -1817,7 +1827,14 @@ public class Program
 
                     try
                     {
-                        swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
+                        if (!cutoff.HasValue)
+                        {
+                            swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
+                        }
+                        else
+                        {
+                            swCsv = new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8) { AutoFlush = true };
+                        }
 
                         _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
 
@@ -1912,8 +1929,8 @@ public class Program
                         }
                     }
                     
-                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize);
-                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize);
+                    ProcessRecords(mftFile.Value.FileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize, cutoff);
+                    ProcessRecords(mftFile.Value.FreeFileRecords, includeShort, alltimestamp, bdl,drDir,mftFile.Key, includeResident, residentExt, residentMaxSize, cutoff);
                 }
                 catch (Exception ex)
                 {
@@ -2858,7 +2875,7 @@ public class Program
         return FileType.Unknown;
     }
 
-    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, bool includeResident, string residentExt, int residentMaxSize)
+    private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, bool includeResident, string residentExt, int residentMaxSize, DateTimeOffset? cutoff)
     {
         
         foreach (var fr in records)
@@ -2920,56 +2937,127 @@ public class Program
                 
 
                 mftr.HasAds = ads.Any();
-
-                _csvWriter?.WriteRecord(mftr);
-
-                _mftOutRecords?.Add(mftr);
-
-                _csvWriter?.NextRecord();
-
-                if (_fileListWriter != null)
+                if (cutoff.HasValue)
                 {
-                    _fileListWriter.WriteRecord(new FileListEntry(mftr));
-                    _fileListWriter.NextRecord();
+                    //if (mftr.LastModified0x10.HasValue)
+                    //{
+                    //    Console.Error.WriteLine(
+                    //        $"Entry={mftr.EntryNumber}-{mftr.SequenceNumber} " +
+                    //        $"LastModified0x10={mftr.LastModified0x10.Value:O} " +
+                    //        $"LastModified0x10Utc={mftr.LastModified0x10.Value.ToUniversalTime():O} " +
+                    //        $"Cutoff={cutoff.Value:O} " +
+                    //        $"CutoffUtc={cutoff.Value.ToUniversalTime():O}");
+                    //}
+                    if (
+                        (mftr.Created0x10.HasValue && mftr.Created0x10.Value >= cutoff.Value) ||
+                        (mftr.LastModified0x10.HasValue && mftr.LastModified0x10.Value >= cutoff.Value)
+                    )
+                    {
+                        _csvWriter?.WriteRecord(mftr);
+
+                        _mftOutRecords?.Add(mftr);
+
+                        _csvWriter?.NextRecord();
+
+                        if (_fileListWriter != null)
+                        {
+                            _fileListWriter.WriteRecord(new FileListEntry(mftr));
+                            _fileListWriter.NextRecord();
+                        }
+
+                        if (_bodyWriter != null)
+                        {
+                            var f = GetBodyData(mftr, true, bdl);
+
+                            _bodyWriter.WriteRecord(f);
+                            _bodyWriter.NextRecord();
+
+                            f = GetBodyData(mftr, false, bdl);
+
+                            _bodyWriter.WriteRecord(f);
+                            _bodyWriter.NextRecord();
+                        }
+
+
+                        foreach (var adsInfo in ads)
+                        {
+                            var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
+                            adsRecord.IsAds = true;
+                            adsRecord.OtherAttributeId = adsInfo.AttributeId;
+                            _csvWriter?.WriteRecord(adsRecord);
+
+                            _mftOutRecords?.Add(adsRecord);
+
+                            _csvWriter?.NextRecord();
+
+                            if (_fileListWriter != null)
+                            {
+                                _fileListWriter.WriteRecord(new FileListEntry(adsRecord));
+                                _fileListWriter.NextRecord();
+                            }
+
+                            if (_bodyWriter != null)
+                            {
+                                var f1 = GetBodyData(adsRecord, true, bdl);
+
+                                _bodyWriter.WriteRecord(f1);
+                                _bodyWriter.NextRecord();
+                            }
+                        }
+                    }
                 }
-
-                if (_bodyWriter != null)
+                else
                 {
-                    var f = GetBodyData(mftr, true, bdl);
+                    _csvWriter?.WriteRecord(mftr);
 
-                    _bodyWriter.WriteRecord(f);
-                    _bodyWriter.NextRecord();
-
-                    f = GetBodyData(mftr, false, bdl);
-
-                    _bodyWriter.WriteRecord(f);
-                    _bodyWriter.NextRecord();
-                }
-
-
-                foreach (var adsInfo in ads)
-                {
-                    var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
-                    adsRecord.IsAds = true;
-                    adsRecord.OtherAttributeId = adsInfo.AttributeId;
-                    _csvWriter?.WriteRecord(adsRecord);
-
-                    _mftOutRecords?.Add(adsRecord);
+                    _mftOutRecords?.Add(mftr);
 
                     _csvWriter?.NextRecord();
 
                     if (_fileListWriter != null)
                     {
-                        _fileListWriter.WriteRecord(new FileListEntry(adsRecord));
+                        _fileListWriter.WriteRecord(new FileListEntry(mftr));
                         _fileListWriter.NextRecord();
                     }
 
                     if (_bodyWriter != null)
                     {
-                        var f1 = GetBodyData(adsRecord, true, bdl);
+                        var f = GetBodyData(mftr, true, bdl);
 
-                        _bodyWriter.WriteRecord(f1);
+                        _bodyWriter.WriteRecord(f);
                         _bodyWriter.NextRecord();
+
+                        f = GetBodyData(mftr, false, bdl);
+
+                        _bodyWriter.WriteRecord(f);
+                        _bodyWriter.NextRecord();
+                    }
+
+
+                    foreach (var adsInfo in ads)
+                    {
+                        var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
+                        adsRecord.IsAds = true;
+                        adsRecord.OtherAttributeId = adsInfo.AttributeId;
+                        _csvWriter?.WriteRecord(adsRecord);
+
+                        _mftOutRecords?.Add(adsRecord);
+
+                        _csvWriter?.NextRecord();
+
+                        if (_fileListWriter != null)
+                        {
+                            _fileListWriter.WriteRecord(new FileListEntry(adsRecord));
+                            _fileListWriter.NextRecord();
+                        }
+
+                        if (_bodyWriter != null)
+                        {
+                            var f1 = GetBodyData(adsRecord, true, bdl);
+
+                            _bodyWriter.WriteRecord(f1);
+                            _bodyWriter.NextRecord();
+                        }
                     }
                 }
             }
