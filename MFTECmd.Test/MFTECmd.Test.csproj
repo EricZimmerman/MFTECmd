@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>10</LangVersion>
+        <IsPackable>false</IsPackable>
+        <Copyright>Eric Zimmerman</Copyright>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="FluentAssertions" Version="[7.2.2,8.0.0)" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+        <PackageReference Include="NUnit" Version="5.0.0" />
+        <PackageReference Include="NUnit3TestAdapter" Version="6.3.1" />
+    </ItemGroup>
+    <ItemGroup>
+        <!-- CliTests run the built MFTECmd.dll, which this copies next to the tests; RewindTests call UsnRewind -->
+        <ProjectReference Include="../MFTECmd/MFTECmd.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Include="TestFiles/**" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+</Project>

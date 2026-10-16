@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+  </Configurations>
+  <Project Path="MFTECmd/MFTECmd.csproj" />
+  <Project Path="MFTECmd.Test/MFTECmd.Test.csproj" />
+</Solution>
