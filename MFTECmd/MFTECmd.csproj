@@ -38,7 +38,7 @@
         <PackageReference Include="ServiceStack.Text" Version="10.4.0" />
         <PackageReference Include="System.CommandLine" Version="2.0.13" />
         
-        <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.7" />
+        <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.13" />
         <PackageReference Include="Usn" Version="2026.10.2" />
     </ItemGroup>
     <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
