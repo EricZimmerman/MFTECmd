@@ -18,4 +18,7 @@ public class SdsOut
     public ulong FileOffset { get; set; }
 
     public string SourceFile { get; set; }
+
+    /// <summary>True for a copy from the $SDS mirror that differs from the primary copy</summary>
+    public bool FromMirror { get; set; }
 }

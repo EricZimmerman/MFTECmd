@@ -70,9 +70,12 @@ public class Program
     private static List<MFTRecordOut> _mftOutRecords;
     private static List<JEntryOut> _jOutRecords;
 
+    /// <summary>--cutoff, in UTC: only $MFT records whose $SI created or modified time is on or after it</summary>
+    private static DateTimeOffset? _cutoff;
+
     private static RootCommand _rootCommand;
 
-    private static async Task Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         ExceptionlessClient.Default.Startup("88KHFwswzxfnYGejAlsVDao47ySGliI6vFbQPt9C");
 
@@ -230,6 +233,11 @@ public class Program
             DefaultValueFactory = _ => 1024
         };
         
+        var cutoffOpt = new Option<DateTimeOffset?>("--cutoff")
+        {
+            Description = "Only include $MFT records whose $STANDARD_INFO created or modified time is on or after this date/time (UTC unless an offset is given). Example: 2025-10-19 or 2025-10-19T13:45:30Z"
+        };
+
         var debugOpt = new Option<bool>("--debug")
         {
             Description = "Show debug information during processing",
@@ -270,22 +278,31 @@ public class Program
            irOpt,
            reOpt,
            rmOpt,
+           cutoffOpt,
            debugOpt,
            traceOpt,
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
 
-        _rootCommand.SetAction(result => DoWork(result.GetValue(fOpt), result.GetValue(mOpt), result.GetValue(jsonOpt),
+        _rootCommand.SetAction(result =>
+        {
+            var cutoff = result.GetValue(cutoffOpt);
+            _cutoff = cutoff.HasValue ? cutoff.Value.ToUniversalTime() : null;
+
+            DoWork(result.GetValue(fOpt), result.GetValue(mOpt), result.GetValue(jsonOpt),
             result.GetValue(jsonfOpt), result.GetValue(csvOpt), result.GetValue(csvfOpt), result.GetValue(bodyOpt),
             result.GetValue(bodyfOpt),result.GetValue(bdlOpt),result.GetValue(blfOpt),result.GetValue(ddOpt),result.GetValue(doOpt),
             result.GetValue(deOpt),result.GetValue(drOpt),result.GetValue(flsOpt),result.GetValue(dsOpt),result.GetValue(dtOpt),result.GetValue(snOpt),
             result.GetValue(flOpt),result.GetValue(atOpt),result.GetValue(rsOpt),result.GetValue(vssOpt),result.GetValue(dedupeOpt),
-            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt)));
+            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt));
+        });
             
-        var foo = _rootCommand.Parse(args).InvokeAsync();
-        
+        var exitCode = await _rootCommand.Parse(args).InvokeAsync();
+
         Log.CloseAndFlush();
+
+        return exitCode;
     }
 
     private static string _activeDateTimeFormat;
@@ -585,6 +602,8 @@ public class Program
         try
         {
             i30 = I30File.Load(f);
+
+            ReportProblems(f, "pages or entries", i30.ParseErrors);
             
         }
         catch (Exception e)
@@ -902,6 +921,8 @@ public class Program
             {
                 j = UsnFile.Load(f);
                 jFiles.Add(f, j);
+
+                ReportProblems(f, "records", j.ParseErrors);
 
                 var ll = new List<string>();
 
@@ -1224,6 +1245,8 @@ public class Program
                 sds = SdsFile.Load(f);
                 sdsFiles.Add(f, sds);
 
+                ReportProblems(f, "entries", sds.ParseErrors);
+
                 var ll = new List<string>();
 
                 if (vss)
@@ -1378,7 +1401,8 @@ public class Program
                             GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
                             Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ", "|"),
                             FileOffset = sdsEntry.FileOffset,
-                            SourceFile = sdsFile.Key
+                            SourceFile = sdsFile.Key,
+                            FromMirror = sdsEntry.FromMirror
                         };
 
                         if (sdsEntry.SecurityDescriptor.Sacl != null && sdsEntry.SecurityDescriptor.Sacl.RawBytes.Length > 0)
@@ -1631,6 +1655,13 @@ public class Program
         {
             Log.Information(
                 "{Key}: FILE records found: {FileRecordsCount:N0} (Free records: {FreeFileRecordsCount:N0}) File size: {FileSize}",mftFile.Key,mftFile.Value.FileRecords.Count,mftFile.Value.FreeFileRecords.Count,Helper.BytesToSizeAsString(mftFile.Value.FileSize));
+
+            ReportParseErrors(mftFile.Key, mftFile.Value);
+
+            if (_cutoff.HasValue)
+            {
+                Log.Information("Only including records created or modified on or after {Cutoff} (--cutoff)", _cutoff.Value.ToString("yyyy-MM-dd HH:mm:ss"));
+            }
 
             StreamWriter swBody = null;
             StreamWriter swCsv = null;
@@ -2858,6 +2889,38 @@ public class Program
         return FileType.Unknown;
     }
 
+    /// <summary>Damaged data that the parsers kept going past; the details are shown with --debug</summary>
+    private static void ReportProblems(string file, string what, List<string> problems)
+    {
+        if (problems.Count == 0)
+        {
+            return;
+        }
+
+        Log.Warning("{File}: {Count:N0} problem(s) with {What} were found and skipped. Use --debug to see them", file, problems.Count, what);
+        foreach (var problem in problems)
+        {
+            Log.Debug("  {Problem}", problem);
+        }
+    }
+
+    private static void ReportParseErrors(string file, Mft mft)
+    {
+        ReportProblems(file, "FILE records", mft.ParseErrors);
+
+        var damaged = mft.FileRecords.Values.Concat(mft.FreeFileRecords.Values).Where(t => t.ParseErrors.Count > 0).ToList();
+        if (damaged.Count == 0)
+        {
+            return;
+        }
+
+        Log.Warning("{File}: {Count:N0} FILE record(s) have damaged attributes; the rest of each record was used. Use --debug to see them", file, damaged.Count);
+        foreach (var fr in damaged)
+        {
+            Log.Debug("  Entry/seq 0x{Entry:X}-0x{Seq:X} at offset 0x{Offset:X}: {Errors}", fr.EntryNumber, fr.SequenceNumber, fr.Offset, string.Join("; ", fr.ParseErrors));
+        }
+    }
+
     private static void ProcessRecords(Dictionary<string, FileRecord> records, bool includeShort, bool alltimestamp, string bdl, string drDumpDir, string mftFilePath, bool includeResident, string residentExt, int residentMaxSize)
     {
         
@@ -2895,6 +2958,12 @@ public class Program
                 }
 
                 var mftr = GetCsvData(fr.Value, fn, null, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
+
+                if (_cutoff.HasValue && (mftr.Created0x10 >= _cutoff.Value || mftr.LastModified0x10 >= _cutoff.Value) == false)
+                {
+                    //--cutoff: also skips this record's ADSs, resident data and bodyfile lines
+                    continue;
+                }
 
                 var ads = fr.Value.GetAlternateDataStreams();
 
