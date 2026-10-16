@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace MFTECmd;
 
@@ -10,13 +10,27 @@ public class LogFileOut
 {
     public ulong Lsn { get; set; }
     public uint TransactionId { get; set; }
+
+    /// <summary>The first record of this record's transaction: transaction ids are reused, this tells transactions apart</summary>
+    public ulong TransactionFirstLsn { get; set; }
+
     public string RedoOperation { get; set; }
     public string UndoOperation { get; set; }
 
-    /// <summary>The $MFT entry the operation changes (operations on index buffers and other attributes have none)</summary>
-    public long? TargetEntryNumber { get; set; }
+    /// <summary>
+    ///     The file the operation changes: the $MFT entry for operations on file records, otherwise the file of the
+    ///     open attribute (index buffers, non-resident data, bitmaps) from the log's checkpoints
+    /// </summary>
+    public ulong? TargetEntryNumber { get; set; }
 
-    /// <summary>With -m: the full path of the record that has this entry number in that $MFT</summary>
+    public uint? TargetSequenceNumber { get; set; }
+
+    /// <summary>For operations on open attributes: the attribute changed (such as IndexAllocation $I30, or Data $J)</summary>
+    public string TargetAttributeType { get; set; }
+
+    public string TargetAttributeName { get; set; }
+
+    /// <summary>With -m: the full path of the target in that $MFT</summary>
     public string TargetPath { get; set; }
 
     /// <summary>The file the decoded data is about (the entry an index entry points to, or the logged FILE record)</summary>
@@ -46,6 +60,10 @@ public class LogFileOut
     public ulong UndoNextLsn { get; set; }
     public string RecordType { get; set; }
     public ushort? TargetAttribute { get; set; }
+
+    /// <summary>The target attribute comes from across missing log data (left from an older pass), so it may be wrong</summary>
+    public bool TargetInferred { get; set; }
+
     public long? TargetVcn { get; set; }
     public string Lcns { get; set; }
     public ushort? RecordOffset { get; set; }

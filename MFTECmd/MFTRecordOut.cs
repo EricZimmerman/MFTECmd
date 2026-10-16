@@ -8,7 +8,7 @@ public class MFTRecordOut
     public uint EntryNumber { get; set; }
     public ushort SequenceNumber { get; set; }
 
-    public uint ParentEntryNumber { get; set; }
+    public ulong ParentEntryNumber { get; set; }
     public ushort? ParentSequenceNumber { get; set; }
 
     public bool InUse { get; set; }
@@ -59,6 +59,9 @@ public class MFTRecordOut
     public string ResidentDataBase64 { get; set; }
     public string ResidentDataHex { get; set; }
     public string ResidentDataASCII { get; set; }
+
+    /// <summary>Problems in this FILE record (damaged attributes, fixups); the attributes that parsed are used</summary>
+    public string ParseErrors { get; set; }
 }
 
 public class FileListEntry

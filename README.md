@@ -34,6 +34,7 @@
     --re <re>          Comma-separated list of extensions to include for resident data (e.g., '.txt,.ps1,.bat'). If omitted, includes all
     --rm <rm>          Maximum size in bytes for resident data to include (max: 1024000) [default: 1024]
     --cutoff <cutoff>  Only include $MFT records whose $STANDARD_INFO created or modified time is on or after this date/time (UTC unless an offset is given). Example: 2025-10-19 or 2025-10-19T13:45:30Z
+    --lowmem           Use less memory at the cost of speed (workstation instead of server garbage collection): about 30% less peak memory, and about 1.4x slower
     --debug            Show debug information during processing
     --trace            Show trace information during processing
 
@@ -55,6 +56,11 @@
 
 The exit code is 0 on success, and 1 for invalid arguments, a file that could not be processed or an export that failed.
 
+`--lowmem` runs with workstation instead of server garbage collection: about 30% less peak memory, about 1.4x slower
+(a 2 GB $MFT: 4.7 GB -> 3.3 GB, 11.7 s -> 15.8 s). The .NET Framework build always uses workstation garbage collection.
+
+The $MFT CSV ends with `ParseErrors`: problems in that FILE record (damaged attributes, fixups) that were skipped.
+
 ## $J paths with an $MFT (-m)
 
 With `-f $J -m $MFT`, the `ParentPath` of each $J record is the path its parent directory had when the record was
@@ -67,24 +73,28 @@ today's location. Use the $MFT and $J of the same volume, collected at the same 
 
 This is the technique, and a reimplementation of the proof of concept (MIT), by Yogesh Khatri of CyberCX:
 [NTFS Usnjrnl Rewind](https://cybercx.com.au/blog/ntfs-usnjrnl-rewind/) and
-[usnjrnl_rewind](https://github.com/CyberCX-DFIR/usnjrnl_rewind). The $MFT is exported too, as before.
+[usnjrnl_rewind](https://github.com/CyberCX-DFIR/usnjrnl_rewind). The $MFT is exported too, as before, with its default
+file names (`--csvf`/`--jsonf` name the $J output).
 
 ## $LogFile
 
 `-f $LogFile` exports one row per log record (CSV and/or JSON), ordered by LSN:
 
-- `Lsn`, `TransactionId`, `RedoOperation`, `UndoOperation`: what the record does. Redo data is the change, undo data
-  what was there before.
-- `TargetEntryNumber`: the $MFT entry changed, for operations on file records (the volume's cluster size is worked
-  out from the FILE records in the log). With `-m`, `TargetPath` is the path of the record with that entry number in
-  that $MFT.
+- `Lsn`, `TransactionId`, `TransactionFirstLsn`, `RedoOperation`, `UndoOperation`: what the record does. Redo data is
+  the change, undo data what was there before. Transaction ids are reused; `TransactionFirstLsn` (the transaction's
+  first record) tells transactions apart.
+- `TargetEntryNumber` through `TargetPath`: what the operation changes. For operations on file records, the $MFT entry
+  (the volume's cluster size is worked out from the FILE records in the log). For the others (index buffers,
+  non-resident data such as `$UsnJrnl:$J`, bitmaps), the file and attribute from the log's checkpoints (the open
+  attribute table) and open records; `TargetInferred` is true when that comes from across missing log data. With
+  `-m`, `TargetPath` is the target's path in that $MFT.
 - `EntryNumber` through `AttributeType`: decoded from the data when it is a FILE record that was written, an attribute
   that was created or deleted (such as `$FILE_NAME` or `$STANDARD_INFORMATION`), a file name index entry that was added
   or deleted (file name, parent, timestamps and size), a directory entry update (timestamps and size), or an update
   of `$STANDARD_INFORMATION` timestamps (such as a time stomp). With `-m`, `ParentPath` is the parent's path in that
   $MFT.
 - `Details`: what was decoded, with the previous values from the undo data.
-- `PreviousLsn`, `UndoNextLsn`, `RecordType`, `TargetAttribute`, `TargetVcn`, `Lcns`, `RecordOffset`,
+- `PreviousLsn`, `UndoNextLsn`, `RecordType`, `TargetAttribute`, `TargetInferred`, `TargetVcn`, `Lcns`, `RecordOffset`,
   `AttributeOffset`, `ClusterBlockOffset`, `RedoLength`, `UndoLength`, `Truncated`, `FileOffset`: the rest of the
   record.
 

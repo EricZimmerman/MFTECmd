@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -188,6 +188,60 @@ public class CliTests
     }
 
     [Test]
+    public void DamagedRecordsHaveParseErrors()
+    {
+        //hello.txt (entry 64) with its $DATA attribute's type changed to one that does not exist
+        var bytes = File.ReadAllBytes(TestFiles.Generated("$MFT"));
+        var record = 64 * 1024;
+        var at = record + BitConverter.ToUInt16(bytes, record + 0x14);
+        while (BitConverter.ToUInt32(bytes, at) != 0x80)
+        {
+            at += BitConverter.ToInt32(bytes, at + 4);
+        }
+
+        BitConverter.GetBytes(0x55).CopyTo(bytes, at);
+        var mft = Path.Combine(_dir, "$MFT");
+        File.WriteAllBytes(mft, bytes);
+
+        var (exitCode, output) = Run("-f", mft, "--csv", Out);
+
+        exitCode.Should().Be(0, output);
+        output.Should().Contain("1 FILE record(s) have damaged attributes");
+
+        var csv = OutFile("$MFT_Output.csv");
+        Header(csv).Last().Should().Be("ParseErrors");
+        var names = Column(csv, "FileName");
+        var errors = Column(csv, "ParseErrors");
+        errors[Array.IndexOf(names, "hello.txt")].Should().StartWith("Unknown attribute type 0x55 at 0x");
+        errors.Count(t => t.Length > 0).Should().Be(1);
+    }
+
+    [Test]
+    public void LowMemoryGivesTheSameOutput()
+    {
+        var j = TestFiles.Gunzip(TestFiles.StolenSzechuan("$J.gz"), _dir);
+        var mft = TestFiles.Gunzip(TestFiles.StolenSzechuan("$MFT_directories.gz"), _dir);
+
+        var (exitCode, output) = Run("-f", j, "-m", mft, "--csv", Path.Combine(Out, "server"), "--csvf", "j.csv", "--debug");
+        exitCode.Should().Be(0, output);
+        output.Should().Contain("Garbage collection: server");
+
+        (exitCode, output) = Run("-f", j, "-m", mft, "--csv", Path.Combine(Out, "lowmem"), "--csvf", "j.csv", "--debug", "--lowmem");
+        exitCode.Should().Be(0, output);
+        output.Should().Contain("Garbage collection: workstation");
+
+        File.ReadAllText(Path.Combine(Out, "lowmem", "j.csv")).Should().Be(File.ReadAllText(Path.Combine(Out, "server", "j.csv")));
+
+        //--csvf names the $J output; the $MFT from -m keeps its own name (it used to be written to the same file)
+        Directory.GetFiles(Path.Combine(Out, "server")).Select(Path.GetFileName).Should().HaveCount(2).And.Contain("j.csv")
+            .And.Contain(t => t.EndsWith("_MFTECmd_$MFT_Output.csv"));
+        File.ReadLines(Path.Combine(Out, "server", "j.csv")).First().Should().StartWith("Name,Extension");
+
+        //and the exit code comes through
+        Run("-f", Path.Combine(_dir, "nope"), "--csv", Out, "--lowmem").ExitCode.Should().Be(1);
+    }
+
+    [Test]
     public void JsonReplacesALongerFile()
     {
         Directory.CreateDirectory(Out);
@@ -302,12 +356,13 @@ public class CliTests
         output.Should().Contain("Log records found: 113,738");
 
         var csv = OutFile("$LogFile_Output.csv");
-        Header(csv).Should().Equal("Lsn", "TransactionId", "RedoOperation", "UndoOperation", "TargetEntryNumber", "TargetPath",
+        Header(csv).Should().Equal("Lsn", "TransactionId", "TransactionFirstLsn", "RedoOperation", "UndoOperation",
+            "TargetEntryNumber", "TargetSequenceNumber", "TargetAttributeType", "TargetAttributeName", "TargetPath",
             "EntryNumber", "SequenceNumber", "FileName", "ParentEntryNumber", "ParentSequenceNumber", "ParentPath",
             "CreatedOn", "ContentModifiedOn", "RecordModifiedOn", "LastAccessedOn", "FileSize", "FileAttributes",
-            "AttributeType", "Details", "PreviousLsn", "UndoNextLsn", "RecordType", "TargetAttribute", "TargetVcn", "Lcns",
-            "RecordOffset", "AttributeOffset", "ClusterBlockOffset", "RedoLength", "UndoLength", "Truncated", "FileOffset",
-            "SourceFile");
+            "AttributeType", "Details", "PreviousLsn", "UndoNextLsn", "RecordType", "TargetAttribute", "TargetInferred",
+            "TargetVcn", "Lcns", "RecordOffset", "AttributeOffset", "ClusterBlockOffset", "RedoLength", "UndoLength",
+            "Truncated", "FileOffset", "SourceFile");
         CsvRows(csv).Should().Be(113_738);
         File.ReadLines(OutFile("$LogFile_Output.json")).Count().Should().Be(113_738);
 
@@ -337,7 +392,20 @@ public class CliTests
         Value("10078477", "Details").Should().Be("Attribute created");
         Value("10078455", "Details").Should().Be("Index entry added (not a file name index)");
         Value("10078455", "EntryNumber").Should().BeEmpty();
-        Value("9570436", "Details").Should().Be("Checkpoint (NTFS restart area)");
+        Value("9570436", "Details").Should().Be("Checkpoint (NTFS restart area 1.0): open attribute table at LSN 9565025, attribute names at LSN 9566135");
+        Value("9565025", "Details").Should().Be("Checkpoint: open attribute table (211 attributes)");
+        Value("8537726", "Details").Should().Be("Attribute opened");
+
+        //the file and attribute of operations on open attributes, from the checkpoints and open records
+        string Target(string lsn) => string.Join(" ", new[] { "TargetEntryNumber", "TargetSequenceNumber", "TargetAttributeType", "TargetAttributeName" }.Select(t => Value(lsn, t)));
+        Target("10078455").Should().Be("25 1 IndexAllocation $O");
+        Target("10078529").Should().Be("84656 2 Data $J");
+        Target("12707550").Should().Be("6 6 Data ");
+        Target("8537726").Should().Be("1406 1 IndexAllocation $I30");
+
+        //transactions: ids are reused, the first LSN tells them apart
+        Value("8527292", "TransactionFirstLsn").Should().Be("8527269");
+        Value("10078529", "TransactionFirstLsn").Should().Be("10078438");
 
         rows.Skip(1).Should().OnlyContain(t => t[Array.IndexOf(header, "TargetPath")].Length == 0, "there is no $MFT");
     }
@@ -357,6 +425,10 @@ public class CliTests
         var targets = Column(csv, "TargetPath");
         targets[Array.IndexOf(lsns, "8527292")].Should().Be(".\\Windows\\assembly\\NativeImages_v4.0.30319_64\\System.Runtc259d85b#");
         targets[Array.IndexOf(lsns, "10078477")].Should().Be(".\\Windows\\WinSxS\\amd64_microsoft-windows-d..rvices-domain-files_31bf3856ad364e35_6.3.9600.16384_none_8bc96e4517571480");
+
+        //open attributes: a directory's $I30, and the volume bitmap
+        targets[Array.IndexOf(lsns, "8527384")].Should().Be(".\\Windows\\assembly\\NativeImages_v4.0.30319_64");
+        targets[Array.IndexOf(lsns, "12707550")].Should().Be(".\\$Bitmap");
     }
 
     [Test]

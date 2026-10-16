@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using LogFile;
@@ -55,6 +55,7 @@ public class LogFileRows
             PreviousLsn = record.ClientPreviousLsn,
             UndoNextLsn = record.ClientUndoNextLsn,
             TransactionId = record.TransactionId,
+            TransactionFirstLsn = record.TransactionFirstLsn,
             RecordType = record.RecordType.ToString(),
             Truncated = record.Truncated,
             FileOffset = record.FileOffset,
@@ -66,7 +67,9 @@ public class LogFileRows
         {
             if (record.RecordType == LogRecordType.ClientRestart)
             {
-                row.Details = "Checkpoint (NTFS restart area)";
+                row.Details = record.Restart == null || record.Restart.OpenAttributeTableLsn == 0
+                    ? "Checkpoint (NTFS restart area), without tables"
+                    : $"Checkpoint (NTFS restart area {record.Restart.MajorVersion}.{record.Restart.MinorVersion}): open attribute table at LSN {record.Restart.OpenAttributeTableLsn}, attribute names at LSN {record.Restart.AttributeNamesLsn}";
             }
 
             return row;
@@ -74,7 +77,7 @@ public class LogFileRows
 
         row.RedoOperation = ntfs.RedoOperation.ToString();
         row.UndoOperation = ntfs.UndoOperation.ToString();
-        row.TargetEntryNumber = ntfs.TargetMftEntry;
+        row.TargetEntryNumber = (ulong?)ntfs.TargetMftEntry;
         row.TargetAttribute = ntfs.TargetAttribute;
         row.TargetVcn = ntfs.TargetVcn;
         row.Lcns = string.Join("|", ntfs.Lcns);
@@ -87,6 +90,11 @@ public class LogFileRows
         if (ntfs.TargetMftEntry.HasValue)
         {
             row.TargetPath = TargetPath(ntfs.TargetMftEntry.Value);
+        }
+        else if (ntfs.TargetOpenAttribute != null)
+        {
+            SetOpenAttribute(row, ntfs.TargetOpenAttribute);
+            row.TargetInferred = ntfs.TargetOpenAttributeInferred;
         }
 
         try
@@ -131,6 +139,24 @@ public class LogFileRows
             return;
         }
 
+        if (ntfs.OpenAttributeTable != null)
+        {
+            row.Details = $"Checkpoint: open attribute table ({ntfs.OpenAttributeTable.Count:N0} attributes)";
+            return;
+        }
+
+        if (ntfs.AttributeNames != null)
+        {
+            row.Details = $"Checkpoint: attribute names ({ntfs.AttributeNames.Count:N0})";
+            return;
+        }
+
+        if (ntfs.OpenedAttribute != null)
+        {
+            row.Details = "Attribute opened";
+            return;
+        }
+
         switch (ntfs.RedoOperation)
         {
             case NtfsOperation.DeallocateFileRecordSegment:
@@ -161,6 +187,52 @@ public class LogFileRows
                 SetResidentValue(row, ntfs);
                 return;
         }
+    }
+
+    /// <summary>The file and attribute an operation on an open attribute changes</summary>
+    private void SetOpenAttribute(LogFileOut row, OpenAttribute target)
+    {
+        var reference = target.FileReference;
+        row.TargetEntryNumber = reference.MftEntryNumber;
+        row.TargetSequenceNumber = reference.MftSequenceNumber;
+        row.TargetAttributeType = target.AttributeType.ToString();
+        row.TargetAttributeName = target.AttributeName;
+
+        if (_mft == null)
+        {
+            return;
+        }
+
+        var key = reference.GetKey();
+        if (_mft.FileRecords.TryGetValue(key, out var record) == false)
+        {
+            _mft.FreeFileRecords.TryGetValue(key, out record);
+        }
+
+        if (record == null)
+        {
+            //that entry has been reused since
+            return;
+        }
+
+        if (row.TargetAttributeName == null)
+        {
+            //not in the log (Windows 7 open records): the record's only attribute of that type has it
+            var named = record.Attributes.Where(t => t.AttributeType == target.AttributeType).Select(t => t.Name ?? string.Empty).Distinct().ToList();
+            if (named.Count == 1)
+            {
+                row.TargetAttributeName = named[0];
+            }
+        }
+
+        row.TargetPath = reference.MftEntryNumber == 5 ? "." : PathOf(record);
+    }
+
+    private string PathOf(FileRecord record)
+    {
+        var fn = record.Attributes.OfType<FileName>().FirstOrDefault(t => t.FileInfo.NameType != NameTypes.Dos) ??
+                 record.Attributes.OfType<FileName>().FirstOrDefault();
+        return fn == null ? null : $"{_mft.GetFullParentPath(fn.FileInfo.ParentMftRecord.GetKey())}\\{fn.FileInfo.FileName}";
     }
 
     private void SetAttribute(LogFileOut row, Attribute attribute, long? entry, string what)
@@ -343,15 +415,7 @@ public class LogFileRows
         path = null;
         if (_byEntry.TryGetValue(entry, out var record))
         {
-            var fn = record.Attributes.OfType<FileName>().FirstOrDefault(t => t.FileInfo.NameType != NameTypes.Dos);
-            if (entry == 5)
-            {
-                path = ".";
-            }
-            else if (fn != null)
-            {
-                path = $"{_mft.GetFullParentPath(fn.FileInfo.ParentMftRecord.GetKey())}\\{fn.FileInfo.FileName}";
-            }
+            path = entry == 5 ? "." : PathOf(record);
         }
 
         _targetPaths[entry] = path;
