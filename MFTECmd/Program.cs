@@ -81,8 +81,38 @@ public class Program
 
     private static RootCommand _rootCommand;
 
+    // JSON time stamps: ISO 8601 in UTC (2024-01-02T03:04:05.6780000Z), as JLECmd writes them, instead of ServiceStack's \/Date(ms)\/
+    private const string JsonDateFormat = "yyyy-MM-ddTHH:mm:ss.fffffffZ";
+
+    private static void ConfigureJsonDates()
+    {
+        JsConfig.DateHandler = DateHandler.ISO8601;
+        JsConfig<DateTimeOffset>.SerializeFn = JsonDate;
+        JsConfig<DateTimeOffset?>.SerializeFn = d => d.HasValue ? JsonDate(d.Value) : null;
+        JsConfig<DateTime>.SerializeFn = JsonDate;
+        JsConfig<DateTime?>.SerializeFn = d => d.HasValue ? JsonDate(d.Value) : null;
+    }
+
+    private static string JsonDate(DateTimeOffset d)
+    {
+        return d.UtcDateTime.ToString(JsonDateFormat, CultureInfo.InvariantCulture);
+    }
+
+    private static string JsonDate(DateTime d)
+    {
+        //timestamps without a kind are already UTC; ToUniversalTime would treat them as local time
+        if (d.Kind == DateTimeKind.Unspecified)
+        {
+            d = DateTime.SpecifyKind(d, DateTimeKind.Utc);
+        }
+
+        return d.ToUniversalTime().ToString(JsonDateFormat, CultureInfo.InvariantCulture);
+    }
+
     private static async Task<int> Main(string[] args)
     {
+        ConfigureJsonDates();
+
         ExceptionlessClient.Default.Startup("88KHFwswzxfnYGejAlsVDao47ySGliI6vFbQPt9C");
 
         var fOpt = new Option<string>("-f")
@@ -1248,7 +1278,6 @@ public class Program
 
         try
         {
-            JsConfig.DateHandler = DateHandler.ISO8601;
 
             using var sWrite = new StreamWriter(new FileStream(outFile, FileMode.Create, FileAccess.Write));
             foreach (var record in records)
@@ -2219,7 +2248,6 @@ public class Program
 
                 try
                 {
-                    JsConfig.DateHandler = DateHandler.ISO8601;
 
                     using var sWrite =
                         new StreamWriter(new FileStream(outFile, FileMode.Create, FileAccess.Write));
