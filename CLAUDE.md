@@ -44,3 +44,4 @@ Larger validations (old vs new output, usnjrnl_rewind on the other Museum $MFT/$
 
 - `<Version>` in `MFTECmd/MFTECmd.csproj` (calendar style, e.g. `2026.10.1`), bumped by hand. The CLI is not packed. A release is a bare tag plus `gh release create <ver> --verify-tag --generate-notes`, and the binaries are built, signed and staged manually.
 - Dependabot (`.github/dependabot.yml`) opens monthly PRs for GitHub Actions and NuGet, and ignores FluentAssertions 8.x.
+- Release builds are staged, signed and zipped by `Build-ZimmermanTools.ps1` in the get-zimmermantools repository (cloned next to this one). Its program table says what goes in this tool's download zip (the files taken from the build, folders copied from the repositories, files kept from the current release zip); a new output file, a content folder or a change in how the tool is built (single file, another framework) needs that entry updated.
