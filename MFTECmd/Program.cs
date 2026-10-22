@@ -1991,6 +1991,7 @@ public class Program
                     Log.Error(e,
                         "Error setting up bodyfile export. Please report to saericzimmerman@gmail.com. Error: {Message}",e.Message);
                     _bodyWriter = null;
+                    exported = false;
                 }
             }
 
@@ -2157,6 +2158,7 @@ public class Program
                         Log.Error(e,
                             "Error setting up CSV export. Please report to saericzimmerman@gmail.com. Error: {Message}",e.Message);
                         _csvWriter = null;
+                        exported = false;
                     }
                 }
             }
