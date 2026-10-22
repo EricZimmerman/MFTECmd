@@ -9,7 +9,7 @@
         <Version>2026.10.2</Version>
         <LangVersion>10</LangVersion>
         <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
-        <Copyright>Eric R. Zimmerman</Copyright>
+        <Copyright>Eric R. Zimmerman 2027</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <StartupObject>MFTECmd.Program</StartupObject>
         <!-- Loading a large $MFT keeps millions of objects alive; server GC about halves the load time
