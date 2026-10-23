@@ -419,7 +419,7 @@ public class Program
         }
     }
     
-    /// <returns>The exit code: 0, or 1 for invalid arguments, a file that could not be processed or a failed export</returns>
+    /// <returns>The exit code: 0, or 1 for invalid arguments, a file that could not be read, or a failed export (a damaged file is 0)</returns>
     private static int DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm)
     {
         var levelSwitch = new LoggingLevelSwitch();
@@ -493,7 +493,8 @@ public class Program
         var fileType = GetFileType(f);
         if (fileType == null)
         {
-            return 1;
+            //an empty file is reported, but it is not a failure of the tool; one that could not be opened is
+            return _emptyFile ? 0 : 1;
         }
 
         var ft = fileType.Value;
@@ -591,12 +592,14 @@ public class Program
                         return 1;
                     }
 
+                    _emptyFile = false;
                     var ftm = GetFileType(m);
 
                     if (ftm != FileType.Mft)
                     {
                         Log.Error("File {M} is not an MFT file!! Verify path and try again. Exiting",m);
-                        return 1;
+                        //a file that is not an $MFT is not a failure of the tool; one that could not be opened is
+                        return ftm == null && _emptyFile == false ? 1 : 0;
                     }
                     
                     var drDir2 = string.Empty;
@@ -610,10 +613,12 @@ public class Program
                     if (ProcessMft(m, vss, dedupe, body, bdl, null, blf, csv, null, json, null, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm) == false)
                     {
                         ok = false;
-                        if (_mft == null)
-                        {
-                            return 1;
-                        }
+                    }
+
+                    if (_mft == null)
+                    {
+                        //the $MFT could not be loaded: 1 when it could not be read, 0 when it is damaged
+                        return ok ? 0 : 1;
                     }
                 }
 
@@ -645,8 +650,25 @@ public class Program
                 //unknown
                 Log.Error(
                     "Unknown file type! Send {F} to saericzimmerman@gmail.com for assistance. Exiting",f);
-                return 1;
+                //not a failure of the tool
+                return 0;
         }
+    }
+
+    /// <summary>
+    ///     Logs a file that could not be loaded. A damaged file is not a failure of the tool: true (exit code 0). A file
+    ///     that could not be read (access denied, in use and the raw read failed too, IO error) is: false (exit code 1)
+    /// </summary>
+    /// <param name="e">The error that stopped the load</param>
+    /// <param name="firstError">When the raw read was tried after a first error, that first error</param>
+    private static bool LoadFailed(Exception e, Exception firstError = null)
+    {
+        Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
+
+        var cause = firstError ?? e;
+        var readError = cause is UnauthorizedAccessException || (cause is IOException && cause is not EndOfStreamException);
+
+        return readError == false;
     }
 
     private static void ShowHelp(string message)
@@ -671,8 +693,7 @@ public class Program
         }
         catch (Exception e)
         {
-            Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
-            return false;
+            return LoadFailed(e);
         }
         
         sw.Stop();
@@ -812,7 +833,7 @@ public class Program
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception firstError)
             {
                 try
                 {
@@ -843,8 +864,7 @@ public class Program
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
-                    return false;
+                    return LoadFailed(e, firstError);
                 }
             }
 
@@ -1017,7 +1037,7 @@ public class Program
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception firstError)
             {
                 try
                 {
@@ -1050,8 +1070,7 @@ public class Program
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
-                    return false;
+                    return LoadFailed(e, firstError);
                 }
             }
 
@@ -1303,6 +1322,9 @@ public class Program
 
         var logFiles = new Dictionary<string, LogFile.LogFile>();
 
+        //the error that made the raw read necessary
+        Exception rerouteCause = null;
+
         try
         {
             var vssPaths = new List<string>();
@@ -1334,6 +1356,7 @@ public class Program
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 //a live $LogFile is in use
+                rerouteCause = e;
                 Log.Warning("{F} is in use. Rerouting...",f);
                 Console.WriteLine();
 
@@ -1350,8 +1373,7 @@ public class Program
         }
         catch (Exception e)
         {
-            Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
-            return false;
+            return LoadFailed(e, rerouteCause);
         }
 
         sw.Stop();
@@ -1494,7 +1516,7 @@ public class Program
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception firstError)
             {
                 try
                 {
@@ -1526,8 +1548,7 @@ public class Program
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
-                    return false;
+                    return LoadFailed(e, firstError);
                 }
             }
 
@@ -1820,7 +1841,7 @@ public class Program
                 }
             }
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException firstError)
         {
             Log.Warning("{File} is in use. Rerouting...",file);
             Console.WriteLine();
@@ -1854,14 +1875,12 @@ public class Program
             }
             catch (Exception e)
             {
-                Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
-                return false;
+                return LoadFailed(e, firstError);
             }
         }
         catch (Exception e)
         {
-            Log.Error(e,"There was an error loading the file! Error: {Message}",e.Message);
-            return false;
+            return LoadFailed(e);
         }
 
         sw.Stop();
@@ -3011,7 +3030,10 @@ public class Program
         return exported;
     }
 
-    /// <summary>The file type from its signature, or null when the file could not be read (the error is logged)</summary>
+    /// <summary>GetFileType found too little data in the file (it returns null, as when the file can't be read)</summary>
+    private static bool _emptyFile;
+
+    /// <summary>The file type from its signature, or null when the file could not be read or is empty (the error is logged)</summary>
     private static FileType? GetFileType(string file)
     {
         const int logFileSig = 0x52545352; //RSTR
@@ -3059,6 +3081,7 @@ public class Program
                 Log.Information(
                     "Not enough data found in {File}. Is the file empty? Exiting",file);
                 Console.WriteLine();
+                _emptyFile = true;
                 return null;
             }
 

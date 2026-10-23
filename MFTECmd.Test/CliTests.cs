@@ -152,15 +152,63 @@ public class CliTests
     }
 
     [Test]
-    public void UnknownFileTypeExits1()
+    public void UnknownFileTypeExits0()
     {
+        // a file that is not an NTFS file is reported, but it is not a failure of the tool
         var file = Path.Combine(_dir, "text.txt");
         File.WriteAllText(file, "This is not an NTFS file at all, but it is long enough to be checked");
 
         var (exitCode, output) = Run("-f", file, "--csv", Out);
 
-        exitCode.Should().Be(1);
+        exitCode.Should().Be(0);
         output.Should().Contain("Unknown file type");
+    }
+
+    [Test]
+    public void DamagedMftExits0()
+    {
+        // a FILE signature followed by garbage: the $MFT can't be loaded, which is a bad file, not a failure of the tool
+        var file = Path.Combine(_dir, "$MFT");
+        var bytes = new byte[4096];
+        new Random(1).NextBytes(bytes);
+        System.Text.Encoding.ASCII.GetBytes("FILE0").CopyTo(bytes, 0);
+        File.WriteAllBytes(file, bytes);
+
+        var (exitCode, output) = Run("-f", file, "--csv", Out);
+
+        exitCode.Should().Be(0, output);
+    }
+
+    [Test]
+    public void OutputThatCannotBeWrittenExits1()
+    {
+        var blocker = Path.Combine(_dir, "blocker");
+        File.WriteAllText(blocker, "");
+
+        Run("-f", TestFiles.Generated("$MFT"), "--csv", blocker).ExitCode.Should().Be(1);
+        Run("-f", TestFiles.Generated("$Boot"), "--csv", blocker).ExitCode.Should().Be(1);
+    }
+
+    [Test]
+    public void LockedFileExits1()
+    {
+        if (OperatingSystem.IsWindows() == false)
+        {
+            Assert.Ignore("Windows only");
+        }
+
+        var file = Path.Combine(_dir, "$I30");
+        File.Copy(TestFiles.Generated("$I30"), file);
+
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            // not elevated, the raw read fails too; elevated, it can work (0), so only the non-elevated case is checked
+            var (exitCode, output) = Run("-f", file, "--csv", Out);
+            if (output.Contains("Error opening file"))
+            {
+                exitCode.Should().Be(1, output);
+            }
+        }
     }
 
     [Test]
