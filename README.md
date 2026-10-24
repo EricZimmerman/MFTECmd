@@ -6,7 +6,7 @@ and Volume Shadow Copies (`--vss`) are read through raw disk access.
 
 | | |
 |---|---|
-| **Version** | 2026.10.2 |
+| **Version** | 2026.10.4 |
 | **Download** | [.NET 10](https://download.ericzimmermanstools.com/net/MFTECmd.zip) (recommended) &middot; [.NET Framework 4.7.2](https://download.ericzimmermanstools.com/MFTECmd.zip) |
 | **All tools** | [ericzimmerman.github.io](https://ericzimmerman.github.io) or [Get-ZimmermanTools](https://download.ericzimmermanstools.com/Get-ZimmermanTools.zip), which downloads them all and keeps them current |
 | **Changes** | [ChangeLog](https://ericzimmerman.github.io/changelog/) |
@@ -166,6 +166,8 @@ file names (`--csvf`/`--jsonf` name the $J output).
 - JSON time stamps end in `Z` instead of `+00:00`; JSON output replaces an existing file instead of leaving old data at
   its end.
 - Exit code 1 when the tool fails (it was always 0). Error reports include source file and line numbers.
+- Warnings about invalid timestamps say where they are (attribute, FILE record and offset, $I30 offset or $LogFile
+  LSN) and show the raw value (2026.10.4).
 
 The full list is in the [ChangeLog](https://ericzimmerman.github.io/changelog/).
 
