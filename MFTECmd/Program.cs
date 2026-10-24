@@ -2166,6 +2166,14 @@ public class Program
                         foo.Map(t => t.FnAttributeId).Ignore();
                         foo.Map(t => t.OtherAttributeId).Ignore();
 
+                        //the resident data columns are only written with --ir (issue #58)
+                        if (includeResident == false)
+                        {
+                            foo.Map(t => t.ResidentDataBase64).Ignore();
+                            foo.Map(t => t.ResidentDataHex).Ignore();
+                            foo.Map(t => t.ResidentDataASCII).Ignore();
+                        }
+
                         _csvWriter.Context.RegisterClassMap(foo);
 
                         _csvWriter.WriteHeader<MFTRecordOut>();

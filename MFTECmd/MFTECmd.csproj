@@ -6,7 +6,7 @@
         <Authors>Eric R. Zimmerman</Authors>
         <Description>MFTECmd</Description>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-        <Version>2026.10.2</Version>
+        <Version>2026.10.3</Version>
         <LangVersion>10</LangVersion>
         <ApplicationIcon>DatabaseSelectRow.ico</ApplicationIcon>
         <Copyright>Eric R. Zimmerman 2027</Copyright>

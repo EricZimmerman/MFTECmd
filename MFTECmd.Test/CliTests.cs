@@ -236,6 +236,33 @@ public class CliTests
     }
 
     [Test]
+    public void ResidentDataColumnsOnlyWithIr()
+    {
+        var (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--csv", Out, "--csvf", "plain.csv", "--json", Out, "--jsonf", "plain.json");
+        exitCode.Should().Be(0, output);
+
+        //issue #58: without --ir the three resident data columns are not written
+        var plain = Path.Combine(Out, "plain.csv");
+        Header(plain).Should().NotContain(t => t.StartsWith("ResidentData"));
+        Header(plain).TakeLast(2).Should().Equal("SourceFile", "ParseErrors");
+        File.ReadAllText(Path.Combine(Out, "plain.json")).Should().NotContain("ResidentData");
+
+        (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--csv", Out, "--csvf", "ir.csv", "--ir");
+        exitCode.Should().Be(0, output);
+
+        var ir = Path.Combine(Out, "ir.csv");
+        Header(ir).TakeLast(5).Should().Equal("SourceFile", "ResidentDataBase64", "ResidentDataHex", "ResidentDataASCII", "ParseErrors");
+        Column(ir, "ResidentDataHex").Should().Contain(t => t.Length > 0);
+
+        //the same rows, the columns they share the same
+        var plainRows = ReadCsv(plain);
+        var irRows = ReadCsv(ir);
+        irRows.Should().HaveSameCount(plainRows);
+        irRows.Select(t => string.Join("|", t.Take(34).Append(t[^1]))).Should()
+            .Equal(plainRows.Select(t => string.Join("|", t.Take(34).Append(t[^1]))));
+    }
+
+    [Test]
     public void DamagedRecordsHaveParseErrors()
     {
         //hello.txt (entry 64) with its $DATA attribute's type changed to one that does not exist

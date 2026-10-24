@@ -85,7 +85,8 @@ MFTECmd.exe -f "c:\temp\SomeI30" --csv "c:\temp\out"
   unless `--csvf`, `--jsonf` or `--bodyf` is given. Copies from Volume Shadow Copies get the VSC number and creation
   time in the name.
 - **`$MFT`**: CSV (`--csv`), JSON (`--json`) and bodyfile (`--body` with `--bdl`). The CSV ends with `ParseErrors`: the
-  problems in that FILE record (damaged attributes, fixups) that were skipped. `--fl` also writes a condensed file
+  problems in that FILE record (damaged attributes, fixups) that were skipped. With `--ir` the resident data columns
+  (`ResidentDataBase64`, `ResidentDataHex`, `ResidentDataASCII`) come before it; without `--ir` they are not written. `--fl` also writes a condensed file
   listing (`..._FileListing.csv`), `--dr` saves resident files to a `Resident` folder, and `--de` shows every detail of
   one entry on the console.
 - **`$J`** and **`$LogFile`**: CSV and JSON, one row per record (see the sections below).
@@ -158,6 +159,7 @@ file names (`--csvf`/`--jsonf` name the $J output).
 - `$J` with `-m $MFT`: parent paths are as they were when each record was written (#56); v3 records are read and v4
   records skipped correctly.
 - New `--cutoff` option, and a `ParseErrors` column at the end of the $MFT CSV.
+- The $MFT CSV only has the resident data columns with `--ir` (#58).
 - $MFTs over 2 GB are supported, one damaged record no longer ends the whole $MFT, and resident attribute lists are
   read.
 - `$SDS`: one row per security id (every entry was output twice) and correct SIDs.
