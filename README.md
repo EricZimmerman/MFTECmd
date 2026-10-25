@@ -6,7 +6,7 @@ and Volume Shadow Copies (`--vss`) are read through raw disk access.
 
 | | |
 |---|---|
-| **Version** | 2026.10.4 |
+| **Version** | 2026.10.5 |
 | **Download** | [.NET 10](https://download.ericzimmermanstools.com/net/MFTECmd.zip) (recommended) &middot; [.NET Framework 4.7.2](https://download.ericzimmermanstools.com/MFTECmd.zip) |
 | **All tools** | [ericzimmerman.github.io](https://ericzimmerman.github.io) or [Get-ZimmermanTools](https://download.ericzimmermanstools.com/Get-ZimmermanTools.zip), which downloads them all and keeps them current |
 | **Changes** | [ChangeLog](https://ericzimmerman.github.io/changelog/) |
@@ -55,6 +55,7 @@ Options:
   --lowmem           Use less memory at the cost of speed (workstation instead of server garbage collection): about 30% less peak memory, and about 1.4x slower
   --debug            Show debug information during processing
   --trace            Show trace information during processing
+  --co               Save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body given)
   -?, -h, --help     Show help and usage information
   --version          Show version information
 ```
@@ -95,6 +96,9 @@ MFTECmd.exe -f "c:\temp\SomeI30" --csv "c:\temp\out"
   console.
 - **`$I30`**: CSV.
 - **JSON**: one object per line, time stamps in ISO 8601 UTC (`2024-01-02T03:04:05.6780000Z`).
+- **Console log** (`--co`): everything shown on the console, with times and levels, in
+  `<timestamp>_MFTECmd_<version>_ConsoleLog.txt` (UTC) in the first of the `--csv`, `--json` and `--body` directories
+  given.
 
 Damaged records, pages and entries are skipped and reported (details with `--debug`), and the rest of the file is still
 processed.
@@ -168,6 +172,8 @@ file names (`--csvf`/`--jsonf` name the $J output).
 - Exit code 1 when the tool fails (it was always 0). Error reports include source file and line numbers.
 - Warnings about invalid timestamps say where they are (attribute, FILE record and offset, $I30 offset or $LogFile
   LSN) and show the raw value (2026.10.4).
+- New `--co`: saves all console messages to `<timestamp>_MFTECmd_<version>_ConsoleLog.txt` in the output directory
+  (Issues #259). --debug and --trace show the time of each message again (they showed the --dt date) (2026.10.5)
 
 The full list is in the [ChangeLog](https://ericzimmerman.github.io/changelog/).
 

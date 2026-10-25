@@ -329,6 +329,39 @@ public class CliTests
     }
 
     [Test]
+    public void ConsoleLog()
+    {
+        //Issues #259: --co saves the console messages to <yyyyMMddHHmmss>_MFTECmd_<version>_ConsoleLog.txt in the first of --csv, --json, --body
+        var csvDir = Path.Combine(Out, "csv");
+        var jsonDir = Path.Combine(Out, "json");
+
+        var (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--csv", csvDir);
+        exitCode.Should().Be(0, output);
+        Directory.GetFiles(csvDir, "*_ConsoleLog.txt").Should().BeEmpty();
+        output.Should().NotContain("Console log:");
+
+        (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--json", jsonDir, "--csv", csvDir, "--co");
+        exitCode.Should().Be(0, output);
+        var log = Directory.GetFiles(csvDir, "*_ConsoleLog.txt").Should().ContainSingle().Subject;
+        Directory.GetFiles(jsonDir, "*_ConsoleLog.txt").Should().BeEmpty();
+        Path.GetFileName(log).Should().MatchRegex(@"^\d{14}_MFTECmd_\d+\.\d+\.\d+_ConsoleLog\.txt$");
+        output.Should().Contain("Console log: " + log);
+        var text = File.ReadAllText(log);
+        text.Should().MatchRegex(@"\[\d\d:\d\d:\d\d\.\d{3} INF\] MFTECmd version ");
+        text.Should().Contain("Command line: -f ").And.Contain("FILE records found");
+
+        //--json only, and --lowmem (run again in a new process): one log
+        (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--json", Path.Combine(Out, "lowmem"), "--co", "--lowmem");
+        exitCode.Should().Be(0, output);
+        Directory.GetFiles(Path.Combine(Out, "lowmem"), "*_ConsoleLog.txt").Should().ContainSingle();
+
+        //no output directory: a warning, and the run goes on
+        (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--de", "64", "--co");
+        exitCode.Should().Be(0, output);
+        output.Should().Contain("--co: no output directory was given").And.Contain("hello.txt");
+    }
+
+    [Test]
     public void DumpEntry()
     {
         var (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--de", "64");

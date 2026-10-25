@@ -290,6 +290,11 @@ public class Program
             Description = "Show trace information during processing",
             DefaultValueFactory = _ => false
         };
+        var coOpt = new Option<bool>("--co")
+        {
+            Description = "Save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body given)",
+            DefaultValueFactory = _ => false
+        };
 
         _rootCommand = new RootCommand
         {
@@ -324,6 +329,7 @@ public class Program
            lowMemOpt,
            debugOpt,
            traceOpt,
+           coOpt,
         };
 
         _rootCommand.Description = Header + "\r\n\r\n" + Footer;
@@ -344,7 +350,7 @@ public class Program
             result.GetValue(bodyfOpt),result.GetValue(bdlOpt),result.GetValue(blfOpt),result.GetValue(ddOpt),result.GetValue(doOpt),
             result.GetValue(deOpt),result.GetValue(drOpt),result.GetValue(flsOpt),result.GetValue(dsOpt),result.GetValue(dtOpt),result.GetValue(snOpt),
             result.GetValue(flOpt),result.GetValue(atOpt),result.GetValue(rsOpt),result.GetValue(vssOpt),result.GetValue(dedupeOpt),
-            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt));
+            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt),result.GetValue(coOpt));
         });
             
         var exitCode = await _rootCommand.Parse(args).InvokeAsync();
@@ -407,7 +413,8 @@ public class Program
         {
             if (arg is DateTimeOffset size)
             {
-                return size.ToString(_activeDateTimeFormat);
+                //an explicit format (the log templates' {Timestamp:HH:mm:ss.fff}) wins over --dt
+                return size.ToString(string.IsNullOrEmpty(format) ? _activeDateTimeFormat : format);
             }
 
             if (arg is IFormattable formattable)
@@ -420,7 +427,7 @@ public class Program
     }
     
     /// <returns>The exit code: 0, or 1 for invalid arguments, a file that could not be read, or a failed export (a damaged file is 0)</returns>
-    private static int DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm)
+    private static int DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm, bool co)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -448,6 +455,12 @@ public class Program
             .WriteTo.Console(outputTemplate: template,formatProvider: formatter)
             .MinimumLevel.ControlledBy(levelSwitch);
       
+        var consoleLog = co ? ConsoleLog.GetPath(DateTimeOffset.UtcNow, csv, json, body) : null;
+        if (consoleLog != null)
+        {
+            conf.WriteTo.File(consoleLog, outputTemplate: ConsoleLog.Template, formatProvider: formatter);
+        }
+
         Log.Logger = conf.CreateLogger();
         
         if (f.IsNullOrEmpty())
@@ -474,6 +487,17 @@ public class Program
         Console.WriteLine();
         Log.Information("Command line: {Args}",string.Join(" ",Environment.GetCommandLineArgs().Skip(1)));
         Console.WriteLine();
+
+        if (consoleLog != null)
+        {
+            Log.Information("Console log: {Path}",consoleLog);
+            Console.WriteLine();
+        }
+        else if (co)
+        {
+            Log.Warning("--co: no output directory was given, so the console messages are not saved");
+            Console.WriteLine();
+        }
         Log.Debug("Garbage collection: {Mode}", GCSettings.IsServerGC ? "server (use --lowmem for less memory)" : "workstation");
 
         if (IsAdministrator() == false)
