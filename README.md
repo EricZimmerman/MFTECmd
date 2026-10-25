@@ -6,7 +6,7 @@ and Volume Shadow Copies (`--vss`) are read through raw disk access.
 
 | | |
 |---|---|
-| **Version** | 2026.10.5 |
+| **Version** | 2026.10.6 |
 | **Download** | [.NET 10](https://download.ericzimmermanstools.com/net/MFTECmd.zip) (recommended) &middot; [.NET Framework 4.7.2](https://download.ericzimmermanstools.com/MFTECmd.zip) |
 | **All tools** | [ericzimmerman.github.io](https://ericzimmerman.github.io) or [Get-ZimmermanTools](https://download.ericzimmermanstools.com/Get-ZimmermanTools.zip), which downloads them all and keeps them current |
 | **Changes** | [ChangeLog](https://ericzimmerman.github.io/changelog/) |
