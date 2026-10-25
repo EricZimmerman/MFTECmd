@@ -308,8 +308,13 @@ public class CliTests
         File.ReadAllText(Path.Combine(Out, "lowmem", "j.csv")).Should().Be(File.ReadAllText(Path.Combine(Out, "server", "j.csv")));
 
         //--csvf names the $J output; the $MFT from -m keeps its own name (it used to be written to the same file)
-        Directory.GetFiles(Path.Combine(Out, "server")).Select(Path.GetFileName).Should().HaveCount(2).And.Contain("j.csv")
-            .And.Contain(t => t.EndsWith("_MFTECmd_$MFT_Output.csv"));
+        var names = Directory.GetFiles(Path.Combine(Out, "server")).Select(Path.GetFileName).ToList();
+        names.Should().HaveCount(3).And.Contain("j.csv").And.Contain(t => t.EndsWith("_MFTECmd_$MFT_Output.csv"));
+
+        //the console log (--co, on by default) has the run's time, as every output name does
+        var mftName = names.Single(t => t.EndsWith("_MFTECmd_$MFT_Output.csv"));
+        names.Should().ContainSingle(t => t.EndsWith("_ConsoleLog.txt")).Which.Should().StartWith(mftName[..15]);
+        Directory.GetFiles(Path.Combine(Out, "lowmem"), "*_ConsoleLog.txt").Should().ContainSingle();
         File.ReadLines(Path.Combine(Out, "server", "j.csv")).First().Should().StartWith("Name,Extension");
 
         //and the exit code comes through
@@ -331,16 +336,16 @@ public class CliTests
     [Test]
     public void ConsoleLog()
     {
-        //Issues #259: --co saves the console messages to <yyyyMMddHHmmss>_MFTECmd_<version>_ConsoleLog.txt in the first of --csv, --json, --body
+        //Issues #259: --co (on by default) saves the console messages to <yyyyMMddHHmmss>_MFTECmd_<version>_ConsoleLog.txt in the first of --csv, --json, --body
         var csvDir = Path.Combine(Out, "csv");
         var jsonDir = Path.Combine(Out, "json");
 
-        var (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--csv", csvDir);
+        var (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--csv", csvDir, "--co", "false");
         exitCode.Should().Be(0, output);
         Directory.GetFiles(csvDir, "*_ConsoleLog.txt").Should().BeEmpty();
         output.Should().NotContain("Console log:");
 
-        (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--json", jsonDir, "--csv", csvDir, "--co");
+        (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--json", jsonDir, "--csv", csvDir);
         exitCode.Should().Be(0, output);
         var log = Directory.GetFiles(csvDir, "*_ConsoleLog.txt").Should().ContainSingle().Subject;
         Directory.GetFiles(jsonDir, "*_ConsoleLog.txt").Should().BeEmpty();
@@ -355,10 +360,10 @@ public class CliTests
         exitCode.Should().Be(0, output);
         Directory.GetFiles(Path.Combine(Out, "lowmem"), "*_ConsoleLog.txt").Should().ContainSingle();
 
-        //no output directory: a warning, and the run goes on
+        //no output directory: no log and no warning, and the run goes on
         (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--de", "64", "--co");
         exitCode.Should().Be(0, output);
-        output.Should().Contain("--co: no output directory was given").And.Contain("hello.txt");
+        output.Should().NotContain("--co:").And.NotContain("Console log:").And.Contain("hello.txt");
     }
 
     [Test]

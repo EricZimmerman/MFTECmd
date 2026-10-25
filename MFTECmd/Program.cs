@@ -81,6 +81,9 @@ public class Program
 
     private static RootCommand _rootCommand;
 
+    /// <summary>The UTC time the run started: every output file name and the console log (--co) have it, so the files of a run sort together</summary>
+    private static DateTimeOffset _runTime;
+
     // JSON time stamps: ISO 8601 in UTC (2024-01-02T03:04:05.6780000Z), as JLECmd writes them, instead of ServiceStack's \/Date(ms)\/
     private const string JsonDateFormat = "yyyy-MM-ddTHH:mm:ss.fffffffZ";
 
@@ -292,8 +295,8 @@ public class Program
         };
         var coOpt = new Option<bool>("--co")
         {
-            Description = "Save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body given)",
-            DefaultValueFactory = _ => false
+            Description = "When true, save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body given). Use --co false to turn it off",
+            DefaultValueFactory = _ => true
         };
 
         _rootCommand = new RootCommand
@@ -455,7 +458,8 @@ public class Program
             .WriteTo.Console(outputTemplate: template,formatProvider: formatter)
             .MinimumLevel.ControlledBy(levelSwitch);
       
-        var consoleLog = co ? ConsoleLog.GetPath(DateTimeOffset.UtcNow, csv, json, body) : null;
+        _runTime = DateTimeOffset.UtcNow;
+        var consoleLog = co ? ConsoleLog.GetPath(_runTime, csv, json, body) : null;
         if (consoleLog != null)
         {
             conf.WriteTo.File(consoleLog, outputTemplate: ConsoleLog.Template, formatProvider: formatter);
@@ -491,11 +495,6 @@ public class Program
         if (consoleLog != null)
         {
             Log.Information("Console log: {Path}",consoleLog);
-            Console.WriteLine();
-        }
-        else if (co)
-        {
-            Log.Warning("--co: no output directory was given, so the console messages are not saved");
             Console.WriteLine();
         }
         Log.Debug("Garbage collection: {Mode}", GCSettings.IsServerGC ? "server (use --lowmem for less memory)" : "workstation");
@@ -727,7 +726,7 @@ public class Program
             "Processed {F} in {TotalSeconds:N4} seconds",f,sw.Elapsed.TotalSeconds);
         Console.WriteLine();
 
-        var dt = DateTimeOffset.UtcNow;
+        var dt = _runTime;
         
         Log.Information("$I30 contains {Active:N0} active and {Slack:N0} slack entries",i30.Entries.Count(t=>t.FromSlack == false),i30.Entries.Count(t=>t.FromSlack));
 
@@ -927,7 +926,7 @@ public class Program
                     }
                 }
 
-                var outName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
+                var outName = $"{_runTime:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
 
                 if (csvf.IsNullOrEmpty() == false)
                 {
@@ -1098,7 +1097,7 @@ public class Program
                 }
             }
 
-            var dateTimeOffset = DateTimeOffset.UtcNow;
+            var dateTimeOffset = _runTime;
 
             sw.Stop();
 
@@ -1409,7 +1408,7 @@ public class Program
             "Processed {F}{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
         Console.WriteLine();
 
-        var dateTimeOffset = DateTimeOffset.UtcNow;
+        var dateTimeOffset = _runTime;
         var ok = true;
 
         foreach (var logFile in logFiles)
@@ -1590,7 +1589,7 @@ public class Program
                 "Processed {F}{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
             Console.WriteLine();
 
-            var dt = DateTimeOffset.UtcNow;
+            var dt = _runTime;
 
             foreach (var sdsFile in sdsFiles)
             {
@@ -1920,7 +1919,7 @@ public class Program
             "Processed {File}{Extra} in {TotalSeconds:N4} seconds",file,extra,sw.Elapsed.TotalSeconds);
         Console.WriteLine();
         
-        var dateTimeOffset = DateTimeOffset.UtcNow;
+        var dateTimeOffset = _runTime;
 
         //false when an export failed
         var exported = true;
