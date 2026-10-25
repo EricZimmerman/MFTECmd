@@ -55,7 +55,7 @@ Options:
   --lowmem           Use less memory at the cost of speed (workstation instead of server garbage collection): about 30% less peak memory, and about 1.4x slower
   --debug            Show debug information during processing
   --trace            Show trace information during processing
-  --co               When true, save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body given). Use --co false to turn it off
+  --co               When true, save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body, --dd given). Use --co false to turn it off
   -?, -h, --help     Show help and usage information
   --version          Show version information
 ```
@@ -175,6 +175,7 @@ file names (`--csvf`/`--jsonf` name the $J output).
 - New `--co` (on by default; `--co false` turns it off): saves all console messages to `<timestamp>_MFTECmd_<version>_ConsoleLog.txt` in the output directory
   (Issues #259). All output files of a run and the console log share one UTC time in their names. --debug and --trace
   show the time of each message again (they showed the --dt date) (2026.10.5)
+- `--dd` on its own (exporting a FILE record) also saves the console log, next to the exported record (2026.10.6)
 
 The full list is in the [ChangeLog](https://ericzimmerman.github.io/changelog/).
 

@@ -295,7 +295,7 @@ public class Program
         };
         var coOpt = new Option<bool>("--co")
         {
-            Description = "When true, save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body given). Use --co false to turn it off",
+            Description = "When true, save all console messages to <timestamp>_MFTECmd_<version>_ConsoleLog.txt in the output directory (the first of --csv, --json, --body, --dd given). Use --co false to turn it off",
             DefaultValueFactory = _ => true
         };
 
@@ -459,7 +459,7 @@ public class Program
             .MinimumLevel.ControlledBy(levelSwitch);
       
         _runTime = DateTimeOffset.UtcNow;
-        var consoleLog = co ? ConsoleLog.GetPath(_runTime, csv, json, body) : null;
+        var consoleLog = co ? ConsoleLog.GetPath(_runTime, csv, json, body, dd) : null;
         if (consoleLog != null)
         {
             conf.WriteTo.File(consoleLog, outputTemplate: ConsoleLog.Template, formatProvider: formatter);

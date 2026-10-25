@@ -336,7 +336,7 @@ public class CliTests
     [Test]
     public void ConsoleLog()
     {
-        //Issues #259: --co (on by default) saves the console messages to <yyyyMMddHHmmss>_MFTECmd_<version>_ConsoleLog.txt in the first of --csv, --json, --body
+        //Issues #259: --co (on by default) saves the console messages to <yyyyMMddHHmmss>_MFTECmd_<version>_ConsoleLog.txt in the first of --csv, --json, --body, --dd
         var csvDir = Path.Combine(Out, "csv");
         var jsonDir = Path.Combine(Out, "json");
 
@@ -359,6 +359,13 @@ public class CliTests
         (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--json", Path.Combine(Out, "lowmem"), "--co", "--lowmem");
         exitCode.Should().Be(0, output);
         Directory.GetFiles(Path.Combine(Out, "lowmem"), "*_ConsoleLog.txt").Should().ContainSingle();
+
+        //--dd alone (with --do): the log goes next to the exported FILE record
+        var ddDir = Path.Combine(Out, "dd");
+        (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--dd", ddDir, "--do", "0");
+        exitCode.Should().Be(0, output);
+        Directory.GetFiles(ddDir, "MFTECmd_FILE_Offset0x0.bin").Should().ContainSingle();
+        Directory.GetFiles(ddDir, "*_ConsoleLog.txt").Should().ContainSingle();
 
         //no output directory: no log and no warning, and the run goes on
         (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--de", "64", "--co");
