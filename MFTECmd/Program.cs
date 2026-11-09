@@ -127,6 +127,11 @@ public class Program
         {
             Description = "$MFT file to use when -f points to a $J or $LogFile file, to resolve parent paths. For $J, the paths are as they were when each record was written"
         };
+        var mnoOpt = new Option<bool>("--mno")
+        {
+            Description = "When true, do not write CSV or JSON output for the $MFT specified with -m",
+            DefaultValueFactory = _ => false
+        };
         var csvOpt = new Option<string>(
             "--csv")
         {
@@ -303,6 +308,7 @@ public class Program
         {
            fOpt,
            mOpt,
+           mnoOpt,
            csvOpt,
            csvfOpt,
            jsonOpt,
@@ -353,7 +359,7 @@ public class Program
             result.GetValue(bodyfOpt),result.GetValue(bdlOpt),result.GetValue(blfOpt),result.GetValue(ddOpt),result.GetValue(doOpt),
             result.GetValue(deOpt),result.GetValue(drOpt),result.GetValue(flsOpt),result.GetValue(dsOpt),result.GetValue(dtOpt),result.GetValue(snOpt),
             result.GetValue(flOpt),result.GetValue(atOpt),result.GetValue(rsOpt),result.GetValue(vssOpt),result.GetValue(dedupeOpt),
-            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt),result.GetValue(coOpt));
+            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt),result.GetValue(coOpt),result.GetValue(mnoOpt));
         });
             
         var exitCode = await _rootCommand.Parse(args).InvokeAsync();
@@ -430,7 +436,7 @@ public class Program
     }
     
     /// <returns>The exit code: 0, or 1 for invalid arguments, a file that could not be read, or a failed export (a damaged file is 0)</returns>
-    private static int DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm, bool co)
+    private static int DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm, bool co, bool mno)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -470,6 +476,12 @@ public class Program
         if (f.IsNullOrEmpty())
         {
             ShowHelp("-f is required. Exiting");
+            return 1;
+        }
+
+        if (mno && m.IsNullOrEmpty())
+        {
+            ShowHelp("--mno requires -m. Exiting");
             return 1;
         }
 
@@ -633,7 +645,7 @@ public class Program
                     }
 
                     //--csvf/--jsonf/--bodyf name the output for -f; the $MFT keeps its default names (it used to overwrite it)
-                    if (ProcessMft(m, vss, dedupe, body, bdl, null, blf, csv, null, json, null, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm) == false)
+                    if (ProcessMft(m, vss, dedupe, body, bdl, null, blf, mno ? null : csv, null, mno ? null : json, null, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm) == false)
                     {
                         ok = false;
                     }
