@@ -152,6 +152,15 @@ public class CliTests
     }
 
     [Test]
+    public void MnoRequiresMftOption()
+    {
+        var (exitCode, output) = Run("-f", TestFiles.Generated("$Boot"), "--mno");
+
+        exitCode.Should().Be(1);
+        output.Should().Contain("--mno requires -m");
+    }
+
+    [Test]
     public void UnknownFileTypeExits0()
     {
         // a file that is not an NTFS file is reported, but it is not a failure of the tool
@@ -448,6 +457,20 @@ public class CliTests
     }
 
     [Test]
+    public void JWithMftNoOutputStillRewindsThePaths()
+    {
+        var j = TestFiles.Gunzip(TestFiles.StolenSzechuan("$J.gz"), _dir);
+        var mft = TestFiles.Gunzip(TestFiles.StolenSzechuan("$MFT_directories.gz"), _dir);
+
+        var (exitCode, output) = Run("-f", j, "-m", mft, "--mno", "--csv", Out, "--json", Out);
+
+        exitCode.Should().Be(0, output);
+        Column(OutFile("$J_Output.csv"), "ParentPath").Should().NotContain(t => t.Contains("PathUnknown"));
+        File.ReadLines(OutFile("$J_Output.json")).Count().Should().Be(82_151);
+        Directory.GetFiles(Out, "*_MFTECmd_$MFT_Output.*").Should().BeEmpty();
+    }
+
+    [Test]
     public void JWithMftUsesTheJournalForRenames()
     {
         var j = Path.Combine(_dir, "$J");
@@ -549,6 +572,19 @@ public class CliTests
         //open attributes: a directory's $I30, and the volume bitmap
         targets[Array.IndexOf(lsns, "8527384")].Should().Be(".\\Windows\\assembly\\NativeImages_v4.0.30319_64");
         targets[Array.IndexOf(lsns, "12707550")].Should().Be(".\\$Bitmap");
+    }
+
+    [Test]
+    public void LogFileWithMftNoOutputStillHasTargetPaths()
+    {
+        var logFile = TestFiles.Gunzip(TestFiles.StolenSzechuan("$LogFile.gz"), _dir);
+        var mft = TestFiles.Gunzip(TestFiles.StolenSzechuan("$MFT_directories.gz"), _dir);
+
+        var (exitCode, output) = Run("-f", logFile, "-m", mft, "--mno", "--csv", Out);
+
+        exitCode.Should().Be(0, output);
+        Column(OutFile("$LogFile_Output.csv"), "TargetPath").Should().Contain(t => t.Length > 0);
+        Directory.GetFiles(Out, "*_MFTECmd_$MFT_Output.*").Should().BeEmpty();
     }
 
     [Test]
