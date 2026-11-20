@@ -25,4 +25,7 @@ public class I30Out
     public ulong LogicalSize { get; set; }
     
     public string SourceFile { get; set; }
+
+    /// <summary>With -m: the path of the directory the entry is in (issue #194)</summary>
+    public string ParentPath { get; set; }
 }

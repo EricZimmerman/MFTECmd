@@ -406,6 +406,68 @@ public class CliTests
         Column(OutFile("$I30_Output.csv"), "FileName").Should().Contain("hello.txt");
     }
 
+    [TestCase("$Boot", 1)]
+    [TestCase("$SDS", 2)]
+    [TestCase("$I30", 58)]
+    public void OtherTypesJsonOnly(string file, int rows)
+    {
+        //Issues #263: --json alone used to want --csv ($SDS, $I30) or write nothing ($Boot)
+        var (exitCode, output) = Run("-f", TestFiles.Generated(file), "--json", Out);
+
+        exitCode.Should().Be(0, output);
+        Directory.GetFiles(Out, "*.csv").Should().BeEmpty();
+        File.ReadLines(OutFile($"{file}_Output.json")).Should().HaveCount(rows).And.OnlyContain(t => t.StartsWith("{"));
+    }
+
+    [Test]
+    public void OtherTypesCsvAndJsonHaveTheSameRows()
+    {
+        Run("-f", TestFiles.Generated("$I30"), "--csv", Out, "--json", Out).ExitCode.Should().Be(0);
+
+        var names = Column(OutFile("$I30_Output.csv"), "FileName");
+        var json = File.ReadAllLines(OutFile("$I30_Output.json"));
+        json.Should().HaveCount(names.Length);
+        json[0].Should().Contain($"\"FileName\":\"{names[0]}\"");
+    }
+
+    [Test]
+    public void SdsWithoutOutputExits1()
+    {
+        var (exitCode, output) = Run("-f", TestFiles.Generated("$SDS"));
+
+        exitCode.Should().Be(1);
+        output.Should().Contain("--csv, --json or --ds is required");
+    }
+
+    [Test]
+    public void I30WithMftHasParentPaths()
+    {
+        //issue #194: -m gives the paths of the directories, as for $J
+        var (exitCode, output) = Run("-f", TestFiles.Generated("$I30"), "-m", TestFiles.Generated("$MFT"), "--csv", Out);
+
+        exitCode.Should().Be(0, output);
+        Column(OutFile("$I30_Output.csv"), "ParentPath").Should().OnlyContain(t => t == ".");
+        OutFile("$MFT_Output.csv");
+    }
+
+    [Test]
+    public void I30WithMftNoOutput()
+    {
+        var (exitCode, output) = Run("-f", TestFiles.Generated("$I30"), "-m", TestFiles.Generated("$MFT"), "--mno", "--json", Out);
+
+        exitCode.Should().Be(0, output);
+        File.ReadLines(OutFile("$I30_Output.json")).Should().OnlyContain(t => t.Contains("\"ParentPath\":\".\""));
+        Directory.GetFiles(Out, "*$MFT_Output*").Should().BeEmpty();
+    }
+
+    [Test]
+    public void I30WithoutMftHasNoParentPaths()
+    {
+        Run("-f", TestFiles.Generated("$I30"), "--csv", Out).ExitCode.Should().Be(0);
+
+        Column(OutFile("$I30_Output.csv"), "ParentPath").Should().OnlyContain(t => t.Length == 0);
+    }
+
     [Test]
     public void JWithoutMftHasNoPaths()
     {

@@ -129,7 +129,7 @@ public class Program
         };
         var mnoOpt = new Option<bool>("--mno")
         {
-            Description = "When true, do not write CSV or JSON output for the $MFT specified with -m",
+            Description = "When true, do not write CSV, JSON or bodyfile output for the $MFT specified with -m (it is only used for the paths)",
             DefaultValueFactory = _ => false
         };
         var csvOpt = new Option<string>(
@@ -549,14 +549,30 @@ public class Program
         switch (ft)
         {
             case FileType.I30:
-                if (csv.IsNullOrEmpty())
+            {
+                if (csv.IsNullOrEmpty() && json.IsNullOrEmpty())
                 {
-                    ShowHelp("--csv is required. Exiting");
+                    ShowHelp("--csv or --json is required. Exiting");
                     return 1;
                 }
-                
-                return ProcessI30(f, csv, csvf, json, jsonf, dt) ? 0 : 1;
-                
+
+                var i30Ok = true;
+
+                if (m.IsNullOrEmpty() == false)
+                {
+                    //the $MFT gives the parent paths (issue #194)
+                    var stop = LoadMftForPaths(m, mno, vss, dedupe, body, bdl, blf, csv, json, fl, dt, dd, @do, fls, sn, at, de, rs, dr, ir, re, rm, out i30Ok);
+                    if (stop != null)
+                    {
+                        return stop.Value;
+                    }
+                }
+
+                i30Ok &= ProcessI30(f, csv, csvf, json, jsonf, dt);
+
+                return i30Ok ? 0 : 1;
+            }
+
             case FileType.Mft:
                 if (csv.IsNullOrEmpty() &&
                     json.IsNullOrEmpty() &&
@@ -619,41 +635,10 @@ public class Program
 
                 if (m.IsNullOrEmpty() == false)
                 {
-                    //the $MFT gives the paths; it is exported too
-                    if (File.Exists(m) == false)
+                    var stop = LoadMftForPaths(m, mno, vss, dedupe, body, bdl, blf, csv, json, fl, dt, dd, @do, fls, sn, at, de, rs, dr, ir, re, rm, out ok);
+                    if (stop != null)
                     {
-                        Log.Error("MFT file {M} does not exist! Verify path and try again. Exiting",m);
-                        Console.WriteLine();
-                        return 1;
-                    }
-
-                    _emptyFile = false;
-                    var ftm = GetFileType(m);
-
-                    if (ftm != FileType.Mft)
-                    {
-                        Log.Error("File {M} is not an MFT file!! Verify path and try again. Exiting",m);
-                        //a file that is not an $MFT is not a failure of the tool; one that could not be opened is
-                        return ftm == null && _emptyFile == false ? 1 : 0;
-                    }
-                    
-                    var drDir2 = string.Empty;
-                    if (dr)
-                    {
-                        var residentDirBase = !json.IsNullOrEmpty() ? json : csv;
-                        drDir2 = Path.Combine(residentDirBase, "Resident");
-                    }
-
-                    //--csvf/--jsonf/--bodyf name the output for -f; the $MFT keeps its default names (it used to overwrite it)
-                    if (ProcessMft(m, vss, dedupe, body, bdl, null, blf, mno ? null : csv, null, mno ? null : json, null, fl, dt, dd, @do, fls, sn, at, de, rs, drDir2, ir, re, rm) == false)
-                    {
-                        ok = false;
-                    }
-
-                    if (_mft == null)
-                    {
-                        //the $MFT could not be loaded: 1 when it could not be read, 0 when it is damaged
-                        return ok ? 0 : 1;
+                        return stop.Value;
                     }
                 }
 
@@ -669,17 +654,18 @@ public class Program
                 return ok ? 0 : 1;
 
             case FileType.Boot:
-                return ProcessBoot(f, vss, dedupe, csv, csvf) ? 0 : 1;
+                return ProcessBoot(f, vss, dedupe, csv, csvf, json, jsonf) ? 0 : 1;
 
             case FileType.Sds:
                 if (csv.IsNullOrEmpty() &&
+                    json.IsNullOrEmpty() &&
                     ds.IsNullOrEmpty())
                 {
-                    ShowHelp("--csv or --ds is required. Exiting");
+                    ShowHelp("--csv, --json or --ds is required. Exiting");
                     return 1;
                 }
 
-                return ProcessSds(f, vss, dedupe, csv, csvf, ds) ? 0 : 1;
+                return ProcessSds(f, vss, dedupe, csv, csvf, json, jsonf, ds) ? 0 : 1;
 
             default:
                 //unknown
@@ -691,7 +677,56 @@ public class Program
     }
 
     /// <summary>
-    ///     Logs a file that could not be loaded. A damaged file is not a failure of the tool: true (exit code 0). A file
+    ///     Loads the $MFT given with -m, which gives the paths for $J, $LogFile and $I30. It is exported too, with its
+    ///     default names (--csvf/--jsonf/--bodyf are for -f), unless --mno is given
+    /// </summary>
+    /// <param name="ok">False when exporting the $MFT failed</param>
+    /// <returns>Null to go on with -f, else the exit code to stop with</returns>
+    private static int? LoadMftForPaths(string m, bool mno, bool vss, bool dedupe, string body, string bdl, bool blf, string csv, string json, bool fl, string dt, string dd, string @do, bool fls, bool sn, bool at, string de, bool rs, bool dr, bool ir, string re, int rm, out bool ok)
+    {
+        ok = true;
+
+        if (File.Exists(m) == false)
+        {
+            Log.Error("MFT file {M} does not exist! Verify path and try again. Exiting",m);
+            Console.WriteLine();
+            return 1;
+        }
+
+        _emptyFile = false;
+        var ftm = GetFileType(m);
+
+        if (ftm != FileType.Mft)
+        {
+            Log.Error("File {M} is not an MFT file!! Verify path and try again. Exiting",m);
+            //a file that is not an $MFT is not a failure of the tool; one that could not be opened is
+            return ftm == null && _emptyFile == false ? 1 : 0;
+        }
+
+        var drDir = string.Empty;
+        if (dr)
+        {
+            var residentDirBase = !json.IsNullOrEmpty() ? json : csv;
+            drDir = Path.Combine(residentDirBase, "Resident");
+        }
+
+        //--csvf/--jsonf/--bodyf name the output for -f; the $MFT keeps its default names (it used to overwrite it)
+        if (ProcessMft(m, vss, dedupe, mno ? null : body, bdl, null, blf, mno ? null : csv, null, mno ? null : json, null, fl, dt, dd, @do, fls, sn, at, de, rs, drDir, ir, re, rm) == false)
+        {
+            ok = false;
+        }
+
+        if (_mft == null)
+        {
+            //the $MFT could not be loaded: 1 when it could not be read, 0 when it is damaged
+            return ok ? 0 : 1;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Logs a file that could not be loaded.A damaged file is not a failure of the tool: true (exit code 0). A file
     ///     that could not be read (access denied, in use and the raw read failed too, IO error) is: false (exit code 1)
     /// </summary>
     /// <param name="e">The error that stopped the load</param>
@@ -724,113 +759,79 @@ public class Program
             i30 = I30File.Load(f);
 
             ReportProblems(f, "pages or entries", i30.ParseErrors);
-            
+
         }
         catch (Exception e)
         {
             return LoadFailed(e);
         }
-        
+
         sw.Stop();
-        
+
         Console.WriteLine();
         Log.Information(
             "Processed {F} in {TotalSeconds:N4} seconds",f,sw.Elapsed.TotalSeconds);
         Console.WriteLine();
 
-        var dt = _runTime;
-        
         Log.Information("$I30 contains {Active:N0} active and {Slack:N0} slack entries",i30.Entries.Count(t=>t.FromSlack == false),i30.Entries.Count(t=>t.FromSlack));
 
-        if (Directory.Exists(csv) == false)
-        {
-            Log.Information(
-                "Path to {Csv} doesn't exist. Creating...",csv);
+        var rows = new List<I30Out>(i30.Entries.Count);
 
-            try
+        foreach (var index in i30.Entries)
+        {
+            Log.Debug("Processing index entry at offset '{OFfset}'",$"0x{index.AbsoluteOffset:X}");
+
+            var ieOut = new I30Out
             {
-                Directory.CreateDirectory(csv);
-            }
-            catch (Exception e)
-            {
-                Log.Fatal(e,
-                    "Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
-                return false;
-            }
+                Offset = index.AbsoluteOffset,
+                FromSlack = index.FromSlack,
+                SelfMftEntry = index.MftReferenceSelf?.MftEntryNumber,
+                SelfMftSequence = index.MftReferenceSelf?.MftSequenceNumber,
+                FileName = index.FileInfo.FileName,
+                Flags = index.FileInfo.Flags.ToString().Replace(", ", "|"),
+                NameType = index.FileInfo.NameType,
+                ParentMftEntry = index.FileInfo.ParentMftRecord.MftEntryNumber,
+                ParentMftSequence = index.FileInfo.ParentMftRecord.MftSequenceNumber,
+                CreatedOn = index.FileInfo.CreatedOn,
+                ContentModifiedOn = index.FileInfo.ContentModifiedOn,
+                RecordModifiedOn = index.FileInfo.RecordModifiedOn,
+                LastAccessedOn = index.FileInfo.LastAccessedOn,
+                PhysicalSize = index.FileInfo.PhysicalSize,
+                LogicalSize = index.FileInfo.LogicalSize,
+                SourceFile = f,
+                //with -m: the path of the directory the entry is in (issue #194)
+                ParentPath = _mft?.GetFullParentPath(index.FileInfo.ParentMftRecord.GetKey())
+            };
+
+            Log.Verbose("{Entry}",index);
+
+            rows.Add(ieOut);
         }
 
-        var outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$I30_Output.csv";
+        var ok = true;
 
-        if (csvf.IsNullOrEmpty() == false)
+        if (csv.IsNullOrEmpty() == false)
         {
-            outName = Path.GetFileName(csvf);
+            ok &= WriteCsv(csv, GetOutName(f, _runTime, "$I30", ".csv", csvf), rows, map =>
+            {
+                map.Map(t => t.CreatedOn).Convert(t => $"{t.Value.CreatedOn?.ToString(dateFormat)}");
+                map.Map(t => t.LastAccessedOn).Convert(t => $"{t.Value.LastAccessedOn?.ToString(dateFormat)}");
+                map.Map(t => t.RecordModifiedOn).Convert(t => $"{t.Value.RecordModifiedOn?.ToString(dateFormat)}");
+                map.Map(t => t.ContentModifiedOn).Convert(t => $"{t.Value.ContentModifiedOn?.ToString(dateFormat)}");
+            });
         }
-        
-        var outFile = Path.Combine(csv, outName);
 
-        Log.Information("\tCSV output will be saved to {OutFile}",outFile);
-
-        var swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
-
-        _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
-        
-        //start here
-        
-           var foo = _csvWriter.Context.AutoMap<I30Out>();
-           
-           foo.Map(t => t.CreatedOn).Convert(t => $"{t.Value.CreatedOn?.ToString(dateFormat)}");
-           foo.Map(t => t.LastAccessedOn).Convert(t => $"{t.Value.LastAccessedOn?.ToString(dateFormat)}");
-           foo.Map(t => t.RecordModifiedOn).Convert(t => $"{t.Value.RecordModifiedOn?.ToString(dateFormat)}");
-           foo.Map(t => t.ContentModifiedOn).Convert(t => $"{t.Value.ContentModifiedOn?.ToString(dateFormat)}");
-
-                    _csvWriter.Context.RegisterClassMap(foo);
-
-                    _csvWriter.WriteHeader<I30Out>();
-                    _csvWriter.NextRecord();
-
-                    foreach (var index in i30.Entries)
-                    {
-                        Log.Debug("Processing index entry at offset '{OFfset}'",$"0x{index.AbsoluteOffset:X}");
-
-                        var ieOut = new I30Out
-                        {
-                        
-                            Offset = index.AbsoluteOffset,
-                            FromSlack = index.FromSlack,
-                            SelfMftEntry = index.MftReferenceSelf?.MftEntryNumber,
-                            SelfMftSequence = index.MftReferenceSelf?.MftSequenceNumber,
-                            FileName = index.FileInfo.FileName,
-                            Flags = index.FileInfo.Flags.ToString().Replace(", ", "|"),
-                            NameType = index.FileInfo.NameType,
-                            ParentMftEntry = index.FileInfo.ParentMftRecord.MftEntryNumber,
-                            ParentMftSequence = index.FileInfo.ParentMftRecord.MftSequenceNumber,
-                            CreatedOn = index.FileInfo.CreatedOn,
-                            ContentModifiedOn = index.FileInfo.ContentModifiedOn,
-                            RecordModifiedOn = index.FileInfo.RecordModifiedOn,
-                            LastAccessedOn = index.FileInfo.LastAccessedOn,
-                            PhysicalSize = index.FileInfo.PhysicalSize,
-                            LogicalSize = index.FileInfo.LogicalSize,
-                            
-                            SourceFile = f
-                        };
-
-                        Log.Verbose("{Entry}",index);
-
-                        _csvWriter.WriteRecord(ieOut);
-                        _csvWriter.NextRecord();
-                    }
-        
-        //END HERE 
-        
-        swCsv.Flush();
-        swCsv.Close();
+        if (json.IsNullOrEmpty() == false)
+        {
+            ok &= WriteJson(json, GetOutName(f, _runTime, "$I30", ".json", jsonf), rows);
+        }
 
         Console.WriteLine();
 
-        return true;
+        return ok;
     }
 
-    private static bool ProcessBoot(string f, bool vss, bool dedupe, string csv, string csvf)
+    private static bool ProcessBoot(string f, bool vss, bool dedupe, string csv, string csvf, string json, string jsonf)
     {
         var sw = new Stopwatch();
         sw.Start();
@@ -917,49 +918,7 @@ public class Program
                 "Processed {F}{Extra} in {TotalSeconds:N4} seconds",f,extra,sw.Elapsed.TotalSeconds);
             Console.WriteLine();
 
-            StreamWriter swCsv = null;
-
-            if (csv.IsNullOrEmpty() == false)
-            {
-                if (Directory.Exists(csv) == false)
-                {
-                    Log.Information(
-                        "Path to {Csv} doesn't exist. Creating...",csv);
-
-                    try
-                    {
-                        Directory.CreateDirectory(csv!);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Fatal(
-                            ex,"Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
-                        return false;
-                    }
-                }
-
-                var outName = $"{_runTime:yyyyMMddHHmmss}_MFTECmd_$Boot_Output.csv";
-
-                if (csvf.IsNullOrEmpty() == false)
-                {
-                    outName = Path.GetFileName(csvf);
-                }
-
-                var outFile = Path.Combine(csv, outName);
-
-                Log.Information("CSV output will be saved to {OutFile}",outFile);
-                Console.WriteLine();
-
-                swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
-
-                _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
-
-                var foo = _csvWriter.Context.AutoMap<BootOut>();
-
-                _csvWriter.Context.RegisterClassMap(foo);
-                _csvWriter.WriteHeader<BootOut>();
-                _csvWriter.NextRecord();
-            }
+            var rows = new List<BootOut>();
 
             foreach (var b in bootFiles)
             {
@@ -1012,12 +971,26 @@ public class Program
                     SourceFile = b.Key
                 };
 
-                _csvWriter?.WriteRecord(bo);
-                _csvWriter?.NextRecord();
+                rows.Add(bo);
             }
 
-            swCsv?.Flush();
-            swCsv?.Close();
+            //one output for -f and its VSC copies
+            var ok = true;
+
+            if (csv.IsNullOrEmpty() == false)
+            {
+                ok &= WriteCsv(csv, GetOutName(f, _runTime, "$Boot", ".csv", csvf), rows, null);
+            }
+
+            if (json.IsNullOrEmpty() == false)
+            {
+                ok &= WriteJson(json, GetOutName(f, _runTime, "$Boot", ".json", jsonf), rows);
+            }
+
+            if (ok == false)
+            {
+                return false;
+            }
         }
         catch (Exception e)
         {
@@ -1511,7 +1484,7 @@ public class Program
         return new LogFile.LogFile(stream, best);
     }
 
-    private static bool ProcessSds(string f, bool vss, bool dedupe, string csv, string csvf, string ds)
+    private static bool ProcessSds(string f, bool vss, bool dedupe, string csv, string csvf, string json, string jsonf, string ds)
     {
         var sw = new Stopwatch();
         sw.Start();
@@ -1602,124 +1575,79 @@ public class Program
             Console.WriteLine();
 
             var dt = _runTime;
+            var ok = true;
 
             foreach (var sdsFile in sdsFiles)
             {
-                Log.Information("SDS entries found in {Key}: {Count:N0}",sdsFile.Key,sdsFile.Value.SdsEntries.Count);
+                if (csv.IsNullOrEmpty() && json.IsNullOrEmpty())
+                {
+                    break;
+                }
+
+                var rows = new List<SdsOut>(sdsFile.Value.SdsEntries.Count);
+
+                foreach (var sdsEntry in sdsFile.Value.SdsEntries)
+                {
+                    Log.Debug("Processing Id {Id}",sdsEntry.Id);
+
+                    var sdO = new SdsOut
+                    {
+                        Hash = sdsEntry.Hash,
+                        Id = sdsEntry.Id,
+                        Offset = sdsEntry.Offset,
+                        OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
+                        GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
+                        Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ", "|"),
+                        FileOffset = sdsEntry.FileOffset,
+                        SourceFile = sdsFile.Key,
+                        FromMirror = sdsEntry.FromMirror
+                    };
+
+                    if (sdsEntry.SecurityDescriptor.Sacl != null && sdsEntry.SecurityDescriptor.Sacl.RawBytes.Length > 0)
+                    {
+                        sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
+                        var uniqueAce = new HashSet<string>();
+                        foreach (var saclAceRecord in sdsEntry.SecurityDescriptor.Sacl.AceRecords)
+                        {
+                            uniqueAce.Add(saclAceRecord.AceType.ToString());
+                        }
+
+                        sdO.UniqueSaclAceTypes = string.Join("|", uniqueAce);
+                    }
+
+                    if (sdsEntry.SecurityDescriptor.Dacl != null)
+                    {
+                        sdO.DaclAceCount = sdsEntry.SecurityDescriptor.Dacl.AceCount;
+                        var uniqueAce = new HashSet<string>();
+                        foreach (var daclAceRecord in sdsEntry.SecurityDescriptor.Dacl.AceRecords)
+                        {
+                            uniqueAce.Add(daclAceRecord.AceType.ToString());
+                        }
+
+                        sdO.UniqueDaclAceTypes = string.Join("|", uniqueAce);
+                    }
+
+                    Log.Verbose("{Sd}",sdsEntry.SecurityDescriptor);
+
+                    rows.Add(sdO);
+                }
 
                 if (csv.IsNullOrEmpty() == false)
                 {
-                    if (Directory.Exists(csv) == false)
-                    {
-                        Log.Information(
-                            "Path to {Csv} doesn't exist. Creating...",csv);
-
-                        try
-                        {
-                            Directory.CreateDirectory(csv);
-                        }
-                        catch (Exception e)
-                        {
-                            Log.Fatal(e,
-                                "Unable to create directory {Csv}. Does a file with the same name exist? Exiting",csv);
-                            return false;
-                        }
-                    }
-
-                    string outName;
-
-                    if (sdsFile.Key.StartsWith("\\\\.\\"))
-                    {
-                        var vssNumber = Helper.GetVssNumberFromPath(sdsFile.Key);
-                        var vssTime = Helper.GetVssCreationDate(vssNumber);
-
-                        outName =
-                            $"{dt:yyyyMMddHHmmss}_VSS{vssNumber}_{vssTime:yyyyMMddHHmmss_fffffff}_MFTECmd_$SDS_Output.csv";
-
-                        if (csvf.IsNullOrEmpty() == false)
-                        {
-                            outName =
-                                $"VSS{vssNumber}_{vssTime:yyyyMMddHHmmss}_{Path.GetFileName(csvf)}";
-                        }
-                    }
-                    else
-                    {
-                        //normal file
-                        outName = $"{dt:yyyyMMddHHmmss}_MFTECmd_$SDS_Output.csv";
-
-                        if (csvf.IsNullOrEmpty() == false)
-                        {
-                            outName = Path.GetFileName(csvf);
-                        }
-                    }
-
-                    var outFile = Path.Combine(csv, outName);
-
-                    Log.Information("\tCSV output will be saved to {OutFile}",outFile);
-
-                    var swCsv = new StreamWriter(outFile, false, Encoding.UTF8);
-
-                    _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
-
-                    var foo = _csvWriter.Context.AutoMap<SdsOut>();
-
-                    _csvWriter.Context.RegisterClassMap(foo);
-
-                    _csvWriter.WriteHeader<SdsOut>();
-                    _csvWriter.NextRecord();
-
-                    foreach (var sdsEntry in sdsFile.Value.SdsEntries)
-                    {
-                        Log.Debug("Processing Id {Id}",sdsEntry.Id);
-
-                        var sdO = new SdsOut
-                        {
-                            Hash = sdsEntry.Hash,
-                            Id = sdsEntry.Id,
-                            Offset = sdsEntry.Offset,
-                            OwnerSid = sdsEntry.SecurityDescriptor.OwnerSid,
-                            GroupSid = sdsEntry.SecurityDescriptor.GroupSid,
-                            Control = sdsEntry.SecurityDescriptor.Control.ToString().Replace(", ", "|"),
-                            FileOffset = sdsEntry.FileOffset,
-                            SourceFile = sdsFile.Key,
-                            FromMirror = sdsEntry.FromMirror
-                        };
-
-                        if (sdsEntry.SecurityDescriptor.Sacl != null && sdsEntry.SecurityDescriptor.Sacl.RawBytes.Length > 0)
-                        {
-                            sdO.SaclAceCount = sdsEntry.SecurityDescriptor.Sacl.AceCount;
-                            var uniqueAce = new HashSet<string>();
-                            foreach (var saclAceRecord in sdsEntry.SecurityDescriptor.Sacl.AceRecords)
-                            {
-                                uniqueAce.Add(saclAceRecord.AceType.ToString());
-                            }
-
-                            sdO.UniqueSaclAceTypes = string.Join("|", uniqueAce);
-                        }
-
-                        if (sdsEntry.SecurityDescriptor.Dacl != null)
-                        {
-                            sdO.DaclAceCount = sdsEntry.SecurityDescriptor.Dacl.AceCount;
-                            var uniqueAce = new HashSet<string>();
-                            foreach (var daclAceRecord in sdsEntry.SecurityDescriptor.Dacl.AceRecords)
-                            {
-                                uniqueAce.Add(daclAceRecord.AceType.ToString());
-                            }
-
-                            sdO.UniqueDaclAceTypes = string.Join("|", uniqueAce);
-                        }
-
-                        Log.Verbose("{Sd}",sdsEntry.SecurityDescriptor);
-
-                        _csvWriter.WriteRecord(sdO);
-                        _csvWriter.NextRecord();
-                    }
-
-                    swCsv.Flush();
-                    swCsv.Close();
-
-                    Console.WriteLine();
+                    ok &= WriteCsv(csv, GetOutName(sdsFile.Key, dt, "$SDS", ".csv", csvf), rows, null);
                 }
+
+                if (json.IsNullOrEmpty() == false)
+                {
+                    ok &= WriteJson(json, GetOutName(sdsFile.Key, dt, "$SDS", ".json", jsonf), rows);
+                }
+
+                Console.WriteLine();
+            }
+
+            if (ok == false)
+            {
+                return false;
             }
 
 
