@@ -406,6 +406,80 @@ public class CliTests
         Column(OutFile("$I30_Output.csv"), "FileName").Should().Contain("hello.txt");
     }
 
+    /// <summary>Three copies of the generated $MFT in nested folders, plus files -d must skip</summary>
+    private string MftFolder()
+    {
+        var root = Path.Combine(_dir, "in");
+        Directory.CreateDirectory(Path.Combine(root, "a", "b"));
+        Directory.CreateDirectory(Path.Combine(root, "c"));
+        File.Copy(TestFiles.Generated("$MFT"), Path.Combine(root, "a", "$MFT"));
+        File.Copy(TestFiles.Generated("$MFT"), Path.Combine(root, "a", "b", "$MFT"));
+        File.Copy(TestFiles.Generated("$MFT"), Path.Combine(root, "c", "$mft_vss1"));
+        File.Copy(TestFiles.Generated("$I30"), Path.Combine(root, "c", "$MFT_notreally"));
+        File.Copy(TestFiles.Generated("$MFT"), Path.Combine(root, "c", "$MFTMirr"));
+        File.Copy(TestFiles.Generated("$MFT"), Path.Combine(root, "c", "other.bin"));
+        return root;
+    }
+
+    [Test]
+    public void DirectoryGivesOneOutput()
+    {
+        //issue #109: every $MFT under -d in one CSV and one JSON, SourceFile tells them apart
+        var root = MftFolder();
+        var (exitCode, output) = Run("-d", root, "--csv", Out, "--json", Out, "--fl");
+
+        exitCode.Should().Be(0, output);
+        output.Should().Contain("Found 3 $MFT files").And.Contain("Skipping").And.Contain("$MFT_notreally");
+
+        var csv = OutFile("$MFT_Output.csv");
+        var sources = Column(csv, "SourceFile");
+        sources.Should().HaveCount(150);
+        sources.Distinct().Should().Equal(Path.Combine(root, "a", "$MFT"), Path.Combine(root, "a", "b", "$MFT"), Path.Combine(root, "c", "$mft_vss1"));
+        File.ReadLines(csv).Count(t => t.Contains("EntryNumber,SequenceNumber")).Should().Be(1);
+
+        File.ReadLines(OutFile("$MFT_Output.json")).Should().HaveCount(150);
+        File.ReadLines(OutFile("$MFT_Output_FileListing.csv")).Count(t => t.StartsWith("FullPath,")).Should().Be(1);
+        Directory.GetDirectories(Out).Should().BeEmpty("the temporary folders are deleted");
+    }
+
+    [Test]
+    public void DirectoryWithCsvfUsesTheName()
+    {
+        var (exitCode, output) = Run("-d", MftFolder(), "--csv", Out, "--csvf", "all.csv");
+
+        exitCode.Should().Be(0, output);
+        Column(Path.Combine(Out, "all.csv"), "SourceFile").Should().HaveCount(150);
+    }
+
+    [Test]
+    public void DirectoryWithoutMftsExits0()
+    {
+        var empty = Path.Combine(_dir, "empty");
+        Directory.CreateDirectory(empty);
+
+        var (exitCode, output) = Run("-d", empty, "--csv", Out);
+
+        exitCode.Should().Be(0, output);
+        output.Should().Contain("Found 0 $MFT files");
+        Directory.GetFiles(Out, "*.csv").Should().BeEmpty();
+    }
+
+    [TestCase("-m")]
+    [TestCase("--de")]
+    [TestCase("-f")]
+    public void DirectoryWithIncompatibleOptionExits1(string option)
+    {
+        var (exitCode, _) = Run("-d", MftFolder(), "--csv", Out, option, TestFiles.Generated("$MFT"));
+
+        exitCode.Should().Be(1);
+    }
+
+    [Test]
+    public void MissingDirectoryExits1()
+    {
+        Run("-d", Path.Combine(_dir, "nope"), "--csv", Out).ExitCode.Should().Be(1);
+    }
+
     [TestCase("$Boot", 1)]
     [TestCase("$SDS", 2)]
     [TestCase("$I30", 58)]

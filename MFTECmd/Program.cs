@@ -120,7 +120,12 @@ public class Program
 
         var fOpt = new Option<string>("-f")
         {
-            Description = "File to process ($MFT | $J | $LogFile | $Boot | $SDS | $I30). Required"
+            Description = "File to process ($MFT | $J | $LogFile | $Boot | $SDS | $I30). This or -d is required"
+        };
+
+        var dOpt = new Option<string>("-d")
+        {
+            Description = "Directory to search recursively for $MFT files (named $MFT*). All of them go into one CSV/JSON/bodyfile, with SourceFile saying which $MFT each row is from"
         };
         
         var mOpt = new Option<string>("-m")
@@ -307,7 +312,8 @@ public class Program
         _rootCommand = new RootCommand
         {
            fOpt,
-           mOpt,
+           dOpt,
+mOpt,
            mnoOpt,
            csvOpt,
            csvfOpt,
@@ -359,7 +365,7 @@ public class Program
             result.GetValue(bodyfOpt),result.GetValue(bdlOpt),result.GetValue(blfOpt),result.GetValue(ddOpt),result.GetValue(doOpt),
             result.GetValue(deOpt),result.GetValue(drOpt),result.GetValue(flsOpt),result.GetValue(dsOpt),result.GetValue(dtOpt),result.GetValue(snOpt),
             result.GetValue(flOpt),result.GetValue(atOpt),result.GetValue(rsOpt),result.GetValue(vssOpt),result.GetValue(dedupeOpt),
-            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt),result.GetValue(coOpt),result.GetValue(mnoOpt));
+            result.GetValue(debugOpt),result.GetValue(traceOpt),result.GetValue(irOpt),result.GetValue(reOpt),result.GetValue(rmOpt),result.GetValue(coOpt),result.GetValue(mnoOpt),result.GetValue(dOpt));
         });
             
         var exitCode = await _rootCommand.Parse(args).InvokeAsync();
@@ -436,7 +442,7 @@ public class Program
     }
     
     /// <returns>The exit code: 0, or 1 for invalid arguments, a file that could not be read, or a failed export (a damaged file is 0)</returns>
-    private static int DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm, bool co, bool mno)
+    private static int DoWork(string f, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string @do, string de, bool dr, bool fls, string ds, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool debug, bool trace, bool ir, string re, int rm, bool co, bool mno, string d = null)
     {
         var levelSwitch = new LoggingLevelSwitch();
 
@@ -473,9 +479,21 @@ public class Program
 
         Log.Logger = conf.CreateLogger();
         
-        if (f.IsNullOrEmpty())
+        if (f.IsNullOrEmpty() && d.IsNullOrEmpty())
         {
-            ShowHelp("-f is required. Exiting");
+            ShowHelp("-f or -d is required. Exiting");
+            return 1;
+        }
+
+        if (f.IsNullOrEmpty() == false && d.IsNullOrEmpty() == false)
+        {
+            ShowHelp("-f and -d can't be used together. Exiting");
+            return 1;
+        }
+
+        if (d.IsNullOrEmpty() == false && Directory.Exists(d) == false)
+        {
+            Log.Warning("Directory {D} not found. Exiting",d);
             return 1;
         }
 
@@ -485,7 +503,11 @@ public class Program
             return 1;
         }
 
-        if (Path.GetDirectoryName(f)?.Length == 3)
+        if (d.IsNullOrEmpty() == false)
+        {
+            //-d: checked above
+        }
+        else if (Path.GetDirectoryName(f)?.Length == 3)
         {
             //the path is off the root of the drive, so it works for things like $Boot, $MFT, etc
         }
@@ -522,6 +544,11 @@ public class Program
             Log.Error("--vss is present, but administrator rights not found. Exiting");
             Console.WriteLine();
             return 1;
+        }
+
+        if (d.IsNullOrEmpty() == false)
+        {
+            return ProcessMftDirectory(d, m, json, jsonf, csv, csvf, body, bodyf, bdl, blf, dd, de, dr, fls, dt, sn, fl, at, rs, vss, dedupe, ir, re, rm);
         }
 
         //determine file type
@@ -676,8 +703,107 @@ public class Program
         }
     }
 
+    /// <summary>-d (issue #109): every $MFT under <paramref name="d" /> into one output of each kind</summary>
+    private static int ProcessMftDirectory(string d, string m, string json, string jsonf, string csv, string csvf, string body, string bodyf, string bdl, bool blf, string dd, string de, bool dr, bool fls, string dt, bool sn, bool fl, bool at, bool rs, bool vss, bool dedupe, bool ir, string re, int rm)
+    {
+        if (csv.IsNullOrEmpty() && json.IsNullOrEmpty() && body.IsNullOrEmpty())
+        {
+            ShowHelp("--csv, --json or --body is required with -d. Exiting");
+            return 1;
+        }
+
+        if (body.IsNullOrEmpty() == false && bdl.IsNullOrEmpty())
+        {
+            ShowHelp("--bdl is required when using --body. Exiting");
+            return 1;
+        }
+
+        foreach (var (used, name) in new[] { (m.IsNullOrEmpty() == false, "-m"), (vss, "--vss"), (de.IsNullOrEmpty() == false, "--de"), (dd.IsNullOrEmpty() == false, "--dd"), (dr, "--dr") })
+        {
+            if (used)
+            {
+                ShowHelp($"{name} can't be used with -d. Exiting");
+                return 1;
+            }
+        }
+
+        var folderErrors = new List<string>();
+        var candidates = MftDirectory.FindMftFiles(d, folderErrors);
+        foreach (var folderError in folderErrors)
+        {
+            Log.Error("{Error}",folderError);
+        }
+
+        var mftFiles = new List<string>();
+        foreach (var candidate in candidates)
+        {
+            _emptyFile = false;
+            var type = GetFileType(candidate);
+            if (type == FileType.Mft)
+            {
+                mftFiles.Add(candidate);
+            }
+            else
+            {
+                Log.Warning("Skipping {File}: not an $MFT ({Type})",candidate,type?.ToString() ?? "unknown, empty or unreadable");
+            }
+        }
+
+        Log.Information("Found {Count} under {D}",MftDirectory.Plural(mftFiles.Count,"$MFT file"),d);
+        Console.WriteLine();
+
+        if (mftFiles.Count == 0)
+        {
+            //nothing to do is not a failure of the tool; a folder that could not be read is
+            return folderErrors.Count > 0 ? 1 : 0;
+        }
+
+        var outDirs = new[] { csv, json, body }.Where(t => t.IsNullOrEmpty() == false).Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var ok = folderErrors.Count == 0;
+
+        try
+        {
+            for (var i = 0; i < mftFiles.Count; i++)
+            {
+                Log.Information("Processing {File} ({Index} of {Count})...",mftFiles[i],i + 1,mftFiles.Count);
+
+                var tCsv = csv.IsNullOrEmpty() ? null : MftDirectory.TempDir(csv, _runTime, i);
+                var tJson = json.IsNullOrEmpty() ? null : MftDirectory.TempDir(json, _runTime, i);
+                var tBody = body.IsNullOrEmpty() ? null : MftDirectory.TempDir(body, _runTime, i);
+
+                ok &= ProcessMft(mftFiles[i], false, dedupe, tBody, bdl, bodyf, blf, tCsv, csvf, tJson, jsonf, fl, dt, null, null, fls, sn, at, null, rs, string.Empty, ir, re, rm);
+                _mft = null;
+                _mftFiles = null;
+            }
+
+            Console.WriteLine();
+            foreach (var outDir in outDirs)
+            {
+                foreach (var joined in MftDirectory.Combine(MftDirectory.TempRoot(outDir, _runTime), outDir))
+                {
+                    Log.Information("Output for all {Count}: {File}",MftDirectory.Plural(mftFiles.Count,"$MFT"),joined);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Error(e,"Error writing the combined output: {Message}",e.Message);
+            ok = false;
+        }
+        finally
+        {
+            foreach (var outDir in outDirs)
+            {
+                MftDirectory.DeleteTemp(MftDirectory.TempRoot(outDir, _runTime));
+            }
+        }
+
+        Console.WriteLine();
+        return ok ? 0 : 1;
+    }
+
     /// <summary>
-    ///     Loads the $MFT given with -m, which gives the paths for $J, $LogFile and $I30. It is exported too, with its
+    ///     Loads the $MFT given with -m,which gives the paths for $J, $LogFile and $I30. It is exported too, with its
     ///     default names (--csvf/--jsonf/--bodyf are for -f), unless --mno is given
     /// </summary>
     /// <param name="ok">False when exporting the $MFT failed</param>
