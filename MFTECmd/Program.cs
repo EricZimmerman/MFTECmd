@@ -3441,6 +3441,12 @@ public class Program
                 {
                 }
 
+                if (mftr.ResidentDataASCII == null)
+                {
+                    //text the ASCII column can't show
+                    mftr.ResidentDataDecoded = ResidentDecoder.DecodeUtf16Text(data);
+                }
+
                 break;
             }
         }
@@ -3612,6 +3618,17 @@ public class Program
         if (includeResident && adsinfo == null)
         {
             PopulateResidentData(mftr, fr, residentExt, residentMaxSize);
+        }
+
+        if (adsinfo == null && ResidentDecoder.IsRecycleBinInfoName(mftr.FileName))
+        {
+            //Issues #260: $I files stay in the FILE record (in use or free) after the Recycle Bin is emptied
+            var data = fr.Attributes.OfType<Data>().FirstOrDefault(t => t.IsResident && string.IsNullOrEmpty(t.Name))?.ResidentData?.Data;
+            var info = ResidentDecoder.DecodeRecycleBinInfo(data, _activeDateTimeFormat);
+            if (info != null)
+            {
+                mftr.ResidentDataDecoded = info;
+            }
         }
 
         return mftr;

@@ -62,6 +62,11 @@ public class MFTRecordOut
 
     /// <summary>Problems in this FILE record (damaged attributes, fixups); the attributes that parsed are used</summary>
     public string ParseErrors { get; set; }
+
+    /// <summary>
+    ///     Resident $DATA decoded: Recycle Bin $I files (always) and, with --ir, UTF-16 text the ASCII column can't show
+    /// </summary>
+    public string ResidentDataDecoded { get; set; }
 }
 
 public class FileListEntry

@@ -252,23 +252,23 @@ public class CliTests
 
         //issue #58: without --ir the three resident data columns are not written
         var plain = Path.Combine(Out, "plain.csv");
-        Header(plain).Should().NotContain(t => t.StartsWith("ResidentData"));
-        Header(plain).TakeLast(2).Should().Equal("SourceFile", "ParseErrors");
-        File.ReadAllText(Path.Combine(Out, "plain.json")).Should().NotContain("ResidentData");
+        Header(plain).Should().NotContain(t => t.StartsWith("ResidentData") && t != "ResidentDataDecoded");
+        Header(plain).TakeLast(3).Should().Equal("SourceFile", "ParseErrors", "ResidentDataDecoded");
+        File.ReadAllText(Path.Combine(Out, "plain.json")).Should().NotContain("ResidentDataBase64").And.NotContain("ResidentDataHex");
 
         (exitCode, output) = Run("-f", TestFiles.Generated("$MFT"), "--csv", Out, "--csvf", "ir.csv", "--ir");
         exitCode.Should().Be(0, output);
 
         var ir = Path.Combine(Out, "ir.csv");
-        Header(ir).TakeLast(5).Should().Equal("SourceFile", "ResidentDataBase64", "ResidentDataHex", "ResidentDataASCII", "ParseErrors");
+        Header(ir).TakeLast(6).Should().Equal("SourceFile", "ResidentDataBase64", "ResidentDataHex", "ResidentDataASCII", "ParseErrors", "ResidentDataDecoded");
         Column(ir, "ResidentDataHex").Should().Contain(t => t.Length > 0);
 
-        //the same rows, the columns they share the same
+        //the same rows, the columns they share the same (ResidentDataDecoded only gets UTF-16 text with --ir)
         var plainRows = ReadCsv(plain);
         var irRows = ReadCsv(ir);
         irRows.Should().HaveSameCount(plainRows);
-        irRows.Select(t => string.Join("|", t.Take(34).Append(t[^1]))).Should()
-            .Equal(plainRows.Select(t => string.Join("|", t.Take(34).Append(t[^1]))));
+        irRows.Select(t => string.Join("|", t.Take(34).Append(t[^2]))).Should()
+            .Equal(plainRows.Select(t => string.Join("|", t.Take(34).Append(t[^2]))));
     }
 
     [Test]
@@ -293,7 +293,7 @@ public class CliTests
         output.Should().Contain("1 FILE record(s) have damaged attributes");
 
         var csv = OutFile("$MFT_Output.csv");
-        Header(csv).Last().Should().Be("ParseErrors");
+        Header(csv).TakeLast(2).Should().Equal("ParseErrors", "ResidentDataDecoded");
         var names = Column(csv, "FileName");
         var errors = Column(csv, "ParseErrors");
         errors[Array.IndexOf(names, "hello.txt")].Should().StartWith("Unknown attribute type 0x55 at 0x");
