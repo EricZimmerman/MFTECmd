@@ -6,7 +6,7 @@ and Volume Shadow Copies (`--vss`) are read through raw disk access.
 
 | | |
 |---|---|
-| **Version** | 2026.10.6 |
+| **Version** | 2026.11.0 |
 | **Download** | [.NET 10](https://download.ericzimmermanstools.com/net/MFTECmd.zip) (recommended) &middot; [.NET Framework 4.7.2](https://download.ericzimmermanstools.com/MFTECmd.zip) |
 | **All tools** | [ericzimmerman.github.io](https://ericzimmerman.github.io) or [Get-ZimmermanTools](https://download.ericzimmermanstools.com/Get-ZimmermanTools.zip), which downloads them all and keeps them current |
 | **Changes** | [ChangeLog](https://ericzimmerman.github.io/changelog/) |
@@ -25,8 +25,10 @@ Usage:
   MFTECmd [options]
 
 Options:
-  -f <f>             File to process ($MFT | $J | $LogFile | $Boot | $SDS | $I30). Required
-  -m <m>             $MFT file to use when -f points to a $J or $LogFile file, to resolve parent paths. For $J, the paths are as they were when each record was written
+  -f <f>             File to process ($MFT | $J | $LogFile | $Boot | $SDS | $I30). This or -d is required
+  -d <d>             Directory to search recursively for $MFT files (named $MFT*). All of them go into one CSV/JSON/bodyfile, with SourceFile saying which $MFT each row is from
+  -m <m>             $MFT file to use when -f points to a $J, $LogFile or $I30 file, to resolve parent paths. For $J, the paths are as they were when each record was written
+  --mno              When true, do not write CSV, JSON or bodyfile output for the $MFT specified with -m (it is only used for the paths)
   --csv <csv>        Directory to save CSV formatted results to. Be sure to include the full path in double quotes. This or --json required unless --de or --body is specified
   --csvf <csvf>      File name to save CSV formatted results to. When present, overrides default name
   --json <json>      Directory to save JSON formatted results to. Be sure to include the full path in double quotes. This or --csv required unless --de or --body is specified
@@ -78,6 +80,8 @@ MFTECmd.exe -f "c:\temp\SomeLogFile" -m "C:\Temp\SomeMFT" --json "c:\temp\jsonou
 MFTECmd.exe -f "c:\temp\SomeBoot"
 MFTECmd.exe -f "c:\temp\SomeSecure_SDS" --csv "c:\temp\out"
 MFTECmd.exe -f "c:\temp\SomeI30" --csv "c:\temp\out"
+MFTECmd.exe -f "c:\temp\SomeI30" -m "C:\Temp\SomeMFT" --mno --csv "c:\temp\out"
+MFTECmd.exe -d "c:\temp\TriageCollection" --csv "c:\temp\out"
 ```
 
 ## Output
@@ -87,14 +91,15 @@ MFTECmd.exe -f "c:\temp\SomeI30" --csv "c:\temp\out"
   time in the name.
 - **`$MFT`**: CSV (`--csv`), JSON (`--json`) and bodyfile (`--body` with `--bdl`). The CSV ends with `ParseErrors`: the
   problems in that FILE record (damaged attributes, fixups) that were skipped. With `--ir` the resident data columns
-  (`ResidentDataBase64`, `ResidentDataHex`, `ResidentDataASCII`) come before it; without `--ir` they are not written. `--fl` also writes a condensed file
+  (`ResidentDataBase64`, `ResidentDataHex`, `ResidentDataASCII`) come before it; without `--ir` they are not written. After it, `ResidentDataDecoded`: Recycle Bin `$I` files decoded (`Version | Path | Size | Deleted`, in use and free records), and with `--ir` UTF-16 text. `--fl` also writes a condensed file
   listing (`..._FileListing.csv`), `--dr` saves resident files to a `Resident` folder, and `--de` shows every detail of
   one entry on the console.
-- **`$J`** and **`$LogFile`**: CSV and JSON, one row per record (see the sections below).
-- **`$Boot`**: shown on the console, and saved to CSV with `--csv`.
-- **`$SDS`**: CSV, one row per security id (`FromMirror` marks mirror copies that differ); `--ds` shows one on the
+- **`$J`** and **`$LogFile`**: CSV and JSON, one row per record (see the sections below). With `-m`, `--mno` leaves out the $MFT's own output.
+- **`-d <folder>`**: every $MFT under the folder in one CSV, JSON, bodyfile and listing, with `SourceFile` telling them apart.
+- **`$Boot`**: shown on the console, and saved to CSV with `--csv` and JSON with `--json`.
+- **`$SDS`**: CSV and JSON, one row per security id (`FromMirror` marks mirror copies that differ); `--ds` shows one on the
   console.
-- **`$I30`**: CSV.
+- **`$I30`**: CSV and JSON. With `-m $MFT`, `ParentPath` (the last column) has the path of the directory the entries are in.
 - **JSON**: one object per line, time stamps in ISO 8601 UTC (`2024-01-02T03:04:05.6780000Z`).
 - **Console log** (`--co`, on by default; `--co false` turns it off): everything shown on the console, with times and levels, in
   `<timestamp>_MFTECmd_<version>_ConsoleLog.txt` (UTC) in the first of the `--csv`, `--json` and `--body` directories
@@ -152,6 +157,18 @@ file names (`--csvf`/`--jsonf` name the $J output).
 |---|---|
 | `0` | Success. Damaged, empty or unknown files are reported but are not a failure |
 | `1` | The tool failed: invalid arguments, a missing file, a file it can't read (access denied, or in use and the raw read also failed, IO errors), or output that can't be written |
+
+## What's new in 2026.11
+
+- New `-d` option: every $MFT under a folder (named `$MFT*`, searched recursively) goes into one CSV, JSON, bodyfile
+  and file listing; `SourceFile` says which $MFT each row is from (Issues #109).
+- `--json` works for $Boot, $Secure:$SDS and $I30 (Issues #263).
+- `-f $I30 -m $MFT`: a new last column, `ParentPath`, has the path of the directory each index entry is in (Issues #194).
+- New `--mno` option: with `-m`, the $MFT is only used for the paths and its CSV, JSON and bodyfile are not written
+  (Issues #266, PR #63 by reece394).
+- New `ResidentDataDecoded` column at the end of the $MFT output: Recycle Bin `$I` files (original path, size,
+  deletion time) decoded from the FILE record, including free records left after the Recycle Bin was emptied
+  (Issues #260); with `--ir` it also has UTF-16 text that `ResidentDataASCII` can't show.
 
 ## What's new in 2026.10
 

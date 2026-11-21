@@ -67,7 +67,9 @@ public class Program
                                             @"   MFTECmd.exe -f ""c:\temp\SomeLogFile"" -m ""C:\Temp\SomeMFT"" --json ""c:\temp\jsonout""" + "\r\n\t " +
                                             @"   MFTECmd.exe -f ""c:\temp\SomeBoot""" + "\r\n\t " +
                                             @"   MFTECmd.exe -f ""c:\temp\SomeSecure_SDS"" --csv ""c:\temp\out""" + "\r\n\t " +
-                                            @"   MFTECmd.exe -f ""c:\temp\SomeI30"" --csv ""c:\temp\out""" + "\r\n\t" +
+                                            @"   MFTECmd.exe -f ""c:\temp\SomeI30"" --csv ""c:\temp\out""" + "\r\n\t " +
+                                            @"   MFTECmd.exe -f ""c:\temp\SomeI30"" -m ""C:\Temp\SomeMFT"" --mno --csv ""c:\temp\out""" + "\r\n\t " +
+                                            @"   MFTECmd.exe -d ""c:\temp\TriageCollection"" --csv ""c:\temp\out""" + "\r\n\t" +
                                             "\r\n\t" +
                                             "    Short options (single letter) are prefixed with a single dash. Long commands are prefixed with two dashes";
 
@@ -130,7 +132,7 @@ public class Program
         
         var mOpt = new Option<string>("-m")
         {
-            Description = "$MFT file to use when -f points to a $J or $LogFile file, to resolve parent paths. For $J, the paths are as they were when each record was written"
+            Description = "$MFT file to use when -f points to a $J, $LogFile or $I30 file, to resolve parent paths. For $J, the paths are as they were when each record was written"
         };
         var mnoOpt = new Option<bool>("--mno")
         {
