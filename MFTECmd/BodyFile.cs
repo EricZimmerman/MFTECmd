@@ -1,6 +1,9 @@
-﻿namespace MFTECmd;
+﻿using CsvHelper;
 
-public class BodyFile
+namespace MFTECmd;
+
+[CsvRecord]
+public partial class BodyFile
 {
     public int Md5 { get; set; }
     public string Name { get; set; }

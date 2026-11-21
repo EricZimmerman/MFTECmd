@@ -1,6 +1,9 @@
-﻿namespace MFTECmd;
+﻿using CsvHelper;
 
-public class SdsOut
+namespace MFTECmd;
+
+[CsvRecord]
+public partial class SdsOut
 {
     public string Hash { get; set; }
     public uint Id { get; set; }

@@ -1,12 +1,14 @@
 ﻿using System;
-using System.IO;
+using CsvHelper;
 
 namespace MFTECmd;
 
-public class JEntryOut
+[CsvRecord]
+public partial class JEntryOut
 {
     public string Name { get; set; }
-    public string Extension => $"{Path.GetExtension(Name)}{string.Empty}";
+    /// <summary>The extension of <see cref="Name" /> (settable: CsvHelper 34 writes only members it can set)</summary>
+    public string Extension { get; set; }
     public ulong EntryNumber { get; set; }
     public uint SequenceNumber { get; set; }
     public ulong ParentEntryNumber { get; set; }
@@ -15,6 +17,7 @@ public class JEntryOut
 
     public ulong UpdateSequenceNumber { get; set; }
 
+    [CsvConverter(typeof(DateConverter))]
     public DateTimeOffset UpdateTimestamp { get; set; }
 
     public string UpdateReasons { get; set; }

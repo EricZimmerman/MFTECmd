@@ -1,4 +1,5 @@
 ﻿using System;
+using CsvHelper;
 using MFT.Attributes;
 
 namespace MFTECmd;
@@ -69,8 +70,13 @@ public class MFTRecordOut
     public string ResidentDataDecoded { get; set; }
 }
 
-public class FileListEntry
+[CsvRecord]
+public partial class FileListEntry
 {
+    public FileListEntry()
+    {
+    }
+
     public FileListEntry(MFTRecordOut r)
     {
         FullPath = $"{r.ParentPath}\\{r.FileName}";
@@ -86,6 +92,8 @@ public class FileListEntry
 
     public bool IsDirectory { get; set; }
     public ulong FileSize { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? Created0x10 { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? LastModified0x10 { get; set; }
 }

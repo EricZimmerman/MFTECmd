@@ -1,9 +1,11 @@
 ﻿using System;
+using CsvHelper;
 using MFT.Attributes;
 
 namespace MFTECmd;
 
-public class I30Out
+[CsvRecord]
+public partial class I30Out
 {
     public long Offset { get; set; }
     public bool FromSlack { get; set; }
@@ -16,9 +18,13 @@ public class I30Out
     public ulong ParentMftEntry { get; set; }
     public int ParentMftSequence { get; set; }
     
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? CreatedOn { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? ContentModifiedOn { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? RecordModifiedOn { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? LastAccessedOn { get; set; }
     
     public ulong PhysicalSize { get; set; }

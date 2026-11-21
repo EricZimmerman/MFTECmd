@@ -16,7 +16,8 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Boot;
 using LogFile;
-using CsvHelper.Configuration;
+using CsvHelper;
+using CsvWriter = CsvHelper.CsvWriter;
 using Exceptionless;
 using I30;
 using MFT;
@@ -32,7 +33,6 @@ using ServiceStack;
 using ServiceStack.Text;
 using Usn;
 using Attribute = MFT.Attributes.Attribute;
-using CsvWriter = CsvHelper.CsvWriter;
 
 #if !NET9_0_OR_GREATER
 using Directory = Alphaleonis.Win32.Filesystem.Directory;
@@ -76,6 +76,7 @@ public class Program
     private static CsvWriter _bodyWriter;
     private static CsvWriter _csvWriter;
     private static CsvWriter _fileListWriter;
+    private static MftRecordWriter _mftRecordWriter;
     private static List<MFTRecordOut> _mftOutRecords;
 
     /// <summary>--cutoff, in UTC: only $MFT records whose $SI created or modified time is on or after it</summary>
@@ -449,6 +450,7 @@ mOpt,
         var levelSwitch = new LoggingLevelSwitch();
 
         _activeDateTimeFormat = dt;
+        CsvOutput.DateTimeFormat = dt;
         
         var formatter  =
             new DateTimeOffsetFormatter(CultureInfo.CurrentCulture);
@@ -940,13 +942,8 @@ mOpt,
 
         if (csv.IsNullOrEmpty() == false)
         {
-            ok &= WriteCsv(csv, GetOutName(f, _runTime, "$I30", ".csv", csvf), rows, map =>
-            {
-                map.Map(t => t.CreatedOn).Convert(t => $"{t.Value.CreatedOn?.ToString(dateFormat)}");
-                map.Map(t => t.LastAccessedOn).Convert(t => $"{t.Value.LastAccessedOn?.ToString(dateFormat)}");
-                map.Map(t => t.RecordModifiedOn).Convert(t => $"{t.Value.RecordModifiedOn?.ToString(dateFormat)}");
-                map.Map(t => t.ContentModifiedOn).Convert(t => $"{t.Value.ContentModifiedOn?.ToString(dateFormat)}");
-            });
+            //the timestamps in the --dt format (CsvOutput.DateTimeFormat, the same as dateFormat)
+            ok &= WriteCsv(csv, GetOutName(f, _runTime, "$I30", ".csv", csvf), rows);
         }
 
         if (json.IsNullOrEmpty() == false)
@@ -1099,6 +1096,8 @@ mOpt,
                     SourceFile = b.Key
                 };
 
+                bo.ClusterSize = bo.BytesPerSector * bo.SectorsPerCluster;
+
                 rows.Add(bo);
             }
 
@@ -1107,7 +1106,7 @@ mOpt,
 
             if (csv.IsNullOrEmpty() == false)
             {
-                ok &= WriteCsv(csv, GetOutName(f, _runTime, "$Boot", ".csv", csvf), rows, null);
+                ok &= WriteCsv(csv, GetOutName(f, _runTime, "$Boot", ".csv", csvf), rows);
             }
 
             if (json.IsNullOrEmpty() == false)
@@ -1268,6 +1267,7 @@ mOpt,
                 IEnumerable<JEntryOut> Records() => entries.Select((jUsnEntry, i) => new JEntryOut
                 {
                     Name = jUsnEntry.Name,
+                    Extension = $"{System.IO.Path.GetExtension(jUsnEntry.Name)}{string.Empty}",
                     UpdateTimestamp = jUsnEntry.UpdateTimestamp,
                     EntryNumber = jUsnEntry.FileReference.EntryNumber,
                     SequenceNumber = jUsnEntry.FileReference.SequenceNumber,
@@ -1286,11 +1286,7 @@ mOpt,
 
                 if (csv.IsNullOrEmpty() == false)
                 {
-                    ok &= WriteCsv(csv, GetOutName(jFile.Key, dateTimeOffset, "$J", ".csv", csvf), Records(), map =>
-                    {
-                        map.Map(t => t.UpdateTimestamp).Convert(t =>
-                            $"{t.Value.UpdateTimestamp.ToString(dt)}");
-                    });
+                    ok &= WriteCsv(csv, GetOutName(jFile.Key, dateTimeOffset, "$J", ".csv", csvf), Records());
                 }
 
                 if (json.IsNullOrEmpty() == false)
@@ -1379,7 +1375,8 @@ mOpt,
         }
     }
 
-    private static bool WriteCsv<T>(string dir, string outName, IEnumerable<T> records, Action<ClassMap<T>> configure)
+    /// <summary>Writes <paramref name="records" /> of a [CsvRecord] type (timestamps in the --dt format) with a header, UTF-8 with a BOM</summary>
+    private static bool WriteCsv<T>(string dir, string outName, IEnumerable<T> records)
     {
         if (CreateOutputDirectory(dir) == false)
         {
@@ -1392,21 +1389,9 @@ mOpt,
 
         try
         {
-            using var swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
-            using var csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
+            using var csvWriter = CsvWriter.ToFile(outFile, CsvOutput.Options(true));
 
-            var map = csvWriter.Context.AutoMap<T>();
-            configure?.Invoke(map);
-            csvWriter.Context.RegisterClassMap(map);
-
-            csvWriter.WriteHeader<T>();
-            csvWriter.NextRecord();
-
-            foreach (var record in records)
-            {
-                csvWriter.WriteRecord(record);
-                csvWriter.NextRecord();
-            }
+            csvWriter.WriteRecords(records);
 
             return true;
         }
@@ -1549,13 +1534,7 @@ mOpt,
 
             if (csv.IsNullOrEmpty() == false)
             {
-                ok &= WriteCsv(csv, GetOutName(logFile.Key, dateTimeOffset, "$LogFile", ".csv", csvf), Records(), map =>
-                {
-                    map.Map(t => t.CreatedOn).Convert(t => $"{t.Value.CreatedOn?.ToString(dt)}");
-                    map.Map(t => t.ContentModifiedOn).Convert(t => $"{t.Value.ContentModifiedOn?.ToString(dt)}");
-                    map.Map(t => t.RecordModifiedOn).Convert(t => $"{t.Value.RecordModifiedOn?.ToString(dt)}");
-                    map.Map(t => t.LastAccessedOn).Convert(t => $"{t.Value.LastAccessedOn?.ToString(dt)}");
-                });
+                ok &= WriteCsv(csv, GetOutName(logFile.Key, dateTimeOffset, "$LogFile", ".csv", csvf), Records());
             }
 
             if (json.IsNullOrEmpty() == false)
@@ -1762,7 +1741,7 @@ mOpt,
 
                 if (csv.IsNullOrEmpty() == false)
                 {
-                    ok &= WriteCsv(csv, GetOutName(sdsFile.Key, dt, "$SDS", ".csv", csvf), rows, null);
+                    ok &= WriteCsv(csv, GetOutName(sdsFile.Key, dt, "$SDS", ".csv", csvf), rows);
                 }
 
                 if (json.IsNullOrEmpty() == false)
@@ -2004,9 +1983,9 @@ mOpt,
                 Log.Information("Only including records created or modified on or after {Cutoff} (--cutoff)", _cutoff.Value.ToString("yyyy-MM-dd HH:mm:ss"));
             }
 
-            StreamWriter swBody = null;
-            StreamWriter swCsv = null;
-            StreamWriter swFileList = null;
+            _bodyWriter = null;
+            _csvWriter = null;
+            _fileListWriter = null;
 
             if (body.IsNullOrEmpty() == false)
             {
@@ -2062,38 +2041,13 @@ mOpt,
 
                 try
                 {
-                    swBody = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
-                    if (blf)
+                    //pipe-delimited, no header, LF line endings with --blf
+                    _bodyWriter = CsvWriter.ToFile(outFile, CsvOutput.Options(true) with
                     {
-                        swBody.NewLine = "\n";
-                    }
-
-                    var config = new CsvConfiguration(CultureInfo.InvariantCulture)
-                    {
-                        Delimiter = "|"
-                    };
-
-                    if (blf)
-                    {
-                        config.NewLine = "\n";
-                    }
-
-                    _bodyWriter = new CsvWriter(swBody, config);
-
-                    var foo = _bodyWriter.Context.AutoMap<BodyFile>();
-                    foo.Map(t => t.Md5).Index(0);
-                    foo.Map(t => t.Name).Index(1);
-                    foo.Map(t => t.Inode).Index(2);
-                    foo.Map(t => t.Mode).Index(3);
-                    foo.Map(t => t.Uid).Index(4);
-                    foo.Map(t => t.Gid).Index(5);
-                    foo.Map(t => t.Size).Index(6);
-                    foo.Map(t => t.AccessTime).Index(7);
-                    foo.Map(t => t.ModifiedTime).Index(8);
-                    foo.Map(t => t.RecordModifiedTime).Index(9);
-                    foo.Map(t => t.CreatedTime).Index(10);
-
-                    _bodyWriter.Context.RegisterClassMap(foo);
+                        Separator = '|',
+                        HasHeader = false,
+                        NewLine = blf ? "\n" : "\r\n"
+                    });
                 }
                 catch (Exception e)
                 {
@@ -2173,102 +2127,19 @@ mOpt,
 
                         Log.Information("\tCSV file listing output will be saved to {OutFileFl}",outFileFl);
 
-                        swFileList = new StreamWriter(outFileFl, false, Encoding.UTF8);
-                        _fileListWriter = new CsvWriter(swFileList, CultureInfo.InvariantCulture);
-
-                        var foo = _fileListWriter.Context.AutoMap<FileListEntry>();
-
-                        _fileListWriter.Context.RegisterClassMap(foo);
-                        foo.Map(t => t.Created0x10).Convert(t =>
-                            $"{t.Value.Created0x10?.ToString(dt)}");
-                        foo.Map(t => t.LastModified0x10).Convert(t =>
-                            $"{t.Value.LastModified0x10?.ToString(dt)}");
+                        _fileListWriter = CsvWriter.ToFile(outFileFl, CsvOutput.Options(true));
 
                         _fileListWriter.WriteHeader<FileListEntry>();
-                        _fileListWriter.NextRecord();
                     }
 
                     try
                     {
-                        swCsv = new StreamWriter(outFile, false, Encoding.UTF8, 4096 * 4);
+                        _csvWriter = CsvWriter.ToFile(outFile, CsvOutput.Options(true));
 
-                        _csvWriter = new CsvWriter(swCsv, CultureInfo.InvariantCulture);
-
-                        var foo = _csvWriter.Context.AutoMap<MFTRecordOut>();
-
-                        foo.Map(t => t.EntryNumber).Index(0);
-                        foo.Map(t => t.SequenceNumber).Index(1);
-                        foo.Map(t => t.InUse).Index(2);
-                        foo.Map(t => t.ParentEntryNumber).Index(3);
-                        foo.Map(t => t.ParentSequenceNumber).Index(4);
-                        foo.Map(t => t.ParentPath).Index(5);
-                        foo.Map(t => t.FileName).Index(6);
-                        foo.Map(t => t.Extension).Index(7);
-                        foo.Map(t => t.FileSize).Index(8);
-                        foo.Map(t => t.ReferenceCount).Index(9);
-                        foo.Map(t => t.ReparseTarget).Index(10);
-
-                        foo.Map(t => t.IsDirectory).Index(11);
-                        foo.Map(t => t.HasAds).Index(12);
-                        foo.Map(t => t.IsAds).Index(13);
-                        foo.Map(t => t.Timestomped).Index(14).Name("SI<FN");
-                        foo.Map(t => t.uSecZeros).Index(15);
-                        foo.Map(t => t.Copied).Index(16);
-                        foo.Map(t => t.SiFlags).Convert(t => t.Value.SiFlags.ToString().Replace(", ", "|"))
-                            .Index(17);
-                        foo.Map(t => t.NameType).Index(18);
-
-                        foo.Map(t => t.Created0x10).Convert(t =>
-                            $"{t.Value.Created0x10?.ToString(dt)}").Index(19);
-                        foo.Map(t => t.Created0x30).Convert(t =>
-                            $"{t.Value.Created0x30?.ToString(dt)}").Index(20);
-
-                        foo.Map(t => t.LastModified0x10).Convert(t =>
-                                $"{t.Value.LastModified0x10?.ToString(dt)}")
-                            .Index(21);
-                        foo.Map(t => t.LastModified0x30).Convert(t =>
-                                $"{t.Value.LastModified0x30?.ToString(dt)}")
-                            .Index(22);
-
-                        foo.Map(t => t.LastRecordChange0x10).Convert(t =>
-                                $"{t.Value.LastRecordChange0x10?.ToString(dt)}")
-                            .Index(23);
-                        foo.Map(t => t.LastRecordChange0x30).Convert(t =>
-                                $"{t.Value.LastRecordChange0x30?.ToString(dt)}")
-                            .Index(24);
-
-                        foo.Map(t => t.LastAccess0x10).Convert(t =>
-                                $"{t.Value.LastAccess0x10?.ToString(dt)}")
-                            .Index(25);
-
-                        foo.Map(t => t.LastAccess0x30).Convert(t =>
-                                $"{t.Value.LastAccess0x30?.ToString(dt)}")
-                            .Index(26);
-
-                        foo.Map(t => t.UpdateSequenceNumber).Index(27);
-                        foo.Map(t => t.LogfileSequenceNumber).Index(28);
-                        foo.Map(t => t.SecurityId).Index(29);
-
-                        foo.Map(t => t.ObjectIdFileDroid).Index(30);
-                        foo.Map(t => t.LoggedUtilStream).Index(31);
-                        foo.Map(t => t.ZoneIdContents).Index(32);
-                        foo.Map(t => t.SourceFile).Index(33);
-
-                        foo.Map(t => t.FnAttributeId).Ignore();
-                        foo.Map(t => t.OtherAttributeId).Ignore();
-
-                        //the resident data columns are only written with --ir (issue #58)
-                        if (includeResident == false)
-                        {
-                            foo.Map(t => t.ResidentDataBase64).Ignore();
-                            foo.Map(t => t.ResidentDataHex).Ignore();
-                            foo.Map(t => t.ResidentDataASCII).Ignore();
-                        }
-
-                        _csvWriter.Context.RegisterClassMap(foo);
-
-                        _csvWriter.WriteHeader<MFTRecordOut>();
-                        _csvWriter.NextRecord();
+                        //the columns in their fixed order; the resident data columns are only written with --ir (issue #58)
+                        _mftRecordWriter = new MftRecordWriter(includeResident);
+                        _mftRecordWriter.WriteHeader(_csvWriter);
+                        _csvWriter.EndRecord();
                     }
                     catch (Exception e)
                     {
@@ -2281,7 +2152,7 @@ mOpt,
                 }
             }
 
-            if (swBody != null || swCsv != null || _mftOutRecords != null)
+            if (_bodyWriter != null || _csvWriter != null || _mftOutRecords != null)
             {
                 try
                 {
@@ -2305,14 +2176,9 @@ mOpt,
                 }
             }
 
-            swCsv?.Flush();
-            swCsv?.Close();
-
-            swFileList?.Flush();
-            swFileList?.Close();
-
-            swBody?.Flush();
-            swBody?.Close();
+            exported &= CloseCsvWriter(ref _csvWriter);
+            exported &= CloseCsvWriter(ref _fileListWriter);
+            exported &= CloseCsvWriter(ref _bodyWriter);
 
             if (json.IsNullOrEmpty() == false)
             {
@@ -3359,29 +3225,16 @@ mOpt,
 
                 mftr.HasAds = ads.Any();
 
-                _csvWriter?.WriteRecord(mftr);
+                WriteMftRecord(mftr);
 
                 _mftOutRecords?.Add(mftr);
 
-                _csvWriter?.NextRecord();
-
-                if (_fileListWriter != null)
-                {
-                    _fileListWriter.WriteRecord(new FileListEntry(mftr));
-                    _fileListWriter.NextRecord();
-                }
+                _fileListWriter?.WriteRecord(new FileListEntry(mftr));
 
                 if (_bodyWriter != null)
                 {
-                    var f = GetBodyData(mftr, true, bdl);
-
-                    _bodyWriter.WriteRecord(f);
-                    _bodyWriter.NextRecord();
-
-                    f = GetBodyData(mftr, false, bdl);
-
-                    _bodyWriter.WriteRecord(f);
-                    _bodyWriter.NextRecord();
+                    _bodyWriter.WriteRecord(GetBodyData(mftr, true, bdl));
+                    _bodyWriter.WriteRecord(GetBodyData(mftr, false, bdl));
                 }
 
 
@@ -3390,27 +3243,52 @@ mOpt,
                     var adsRecord = GetCsvData(fr.Value, fn, adsInfo, alltimestamp, mftFilePath, includeResident, residentExt, residentMaxSize);
                     adsRecord.IsAds = true;
                     adsRecord.OtherAttributeId = adsInfo.AttributeId;
-                    _csvWriter?.WriteRecord(adsRecord);
+                    WriteMftRecord(adsRecord);
 
                     _mftOutRecords?.Add(adsRecord);
 
-                    _csvWriter?.NextRecord();
+                    _fileListWriter?.WriteRecord(new FileListEntry(adsRecord));
 
-                    if (_fileListWriter != null)
-                    {
-                        _fileListWriter.WriteRecord(new FileListEntry(adsRecord));
-                        _fileListWriter.NextRecord();
-                    }
-
-                    if (_bodyWriter != null)
-                    {
-                        var f1 = GetBodyData(adsRecord, true, bdl);
-
-                        _bodyWriter.WriteRecord(f1);
-                        _bodyWriter.NextRecord();
-                    }
+                    _bodyWriter?.WriteRecord(GetBodyData(adsRecord, true, bdl));
                 }
             }
+        }
+    }
+
+    /// <summary>One row of the $MFT CSV, when it is written</summary>
+    private static void WriteMftRecord(MFTRecordOut mftr)
+    {
+        if (_csvWriter == null)
+        {
+            return;
+        }
+
+        _mftRecordWriter.Write(_csvWriter, mftr);
+        _csvWriter.EndRecord();
+    }
+
+    /// <summary>Flushes and closes a CSV writer of the $MFT exports (CsvHelper 34 buffers until then); false when that fails</summary>
+    private static bool CloseCsvWriter(ref CsvWriter writer)
+    {
+        if (writer == null)
+        {
+            return true;
+        }
+
+        try
+        {
+            writer.Dispose();
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e,
+                "Error finishing CSV export. Please report to saericzimmerman@gmail.com. Error: {Message}",e.Message);
+            return false;
+        }
+        finally
+        {
+            writer = null;
         }
     }
 

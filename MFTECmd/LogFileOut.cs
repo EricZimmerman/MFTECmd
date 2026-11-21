@@ -1,4 +1,5 @@
 ﻿using System;
+using CsvHelper;
 
 namespace MFTECmd;
 
@@ -6,7 +7,8 @@ namespace MFTECmd;
 ///     One $LogFile record. The decoded columns (FileName through Details) are filled when the redo or undo data
 ///     holds a file record, an attribute, an index entry or timestamps; the paths need an $MFT (-m)
 /// </summary>
-public class LogFileOut
+[CsvRecord]
+public partial class LogFileOut
 {
     public ulong Lsn { get; set; }
     public uint TransactionId { get; set; }
@@ -42,9 +44,13 @@ public class LogFileOut
     public uint? ParentSequenceNumber { get; set; }
     public string ParentPath { get; set; }
 
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? CreatedOn { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? ContentModifiedOn { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? RecordModifiedOn { get; set; }
+    [CsvConverter(typeof(NullableDateConverter))]
     public DateTimeOffset? LastAccessedOn { get; set; }
 
     public ulong? FileSize { get; set; }

@@ -1,12 +1,16 @@
-﻿namespace MFTECmd;
+﻿using CsvHelper;
 
-public class BootOut
+namespace MFTECmd;
+
+[CsvRecord]
+public partial class BootOut
 {
     public string EntryPoint { get; set; }
     public string Signature { get; set; }
     public int BytesPerSector { get; set; }
     public int SectorsPerCluster { get; set; }
-    public int ClusterSize => BytesPerSector * SectorsPerCluster;
+    /// <summary>BytesPerSector * SectorsPerCluster (settable: CsvHelper 34 writes only members it can set)</summary>
+    public int ClusterSize { get; set; }
     public long ReservedSectors { get; set; }
     public long TotalSectors { get; set; }
     public long MftClusterBlockNumber { get; set; }
