@@ -522,6 +522,23 @@ public class CliTests
     }
 
     [Test]
+    public void MftJsonEnumsAreNames()
+    {
+        //Issues #263 (Eric): every enum in the JSON is its name, as in the CSV (SiFlags was 6, NameType 3)
+        Run("-f", TestFiles.Generated("$MFT"), "--csv", Out, "--json", Out).ExitCode.Should().Be(0);
+
+        var si = Column(OutFile("$MFT_Output.csv"), "SiFlags");
+        var nt = Column(OutFile("$MFT_Output.csv"), "NameType");
+        var json = File.ReadAllLines(OutFile("$MFT_Output.json"));
+        json.Should().HaveCount(si.Length);
+        for (var i = 0; i < json.Length; i++)
+        {
+            json[i].Should().Contain($"\"SiFlags\":\"{si[i]}\"").And.Contain($"\"NameType\":\"{nt[i]}\"");
+        }
+        si.Should().Contain("Hidden|System");
+    }
+
+    [Test]
     public void SdsWithoutOutputExits1()
     {
         var (exitCode, output) = Run("-f", TestFiles.Generated("$SDS"));

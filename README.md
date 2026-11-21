@@ -163,8 +163,9 @@ file names (`--csvf`/`--jsonf` name the $J output).
 - New `-d` option: every $MFT under a folder (named `$MFT*`, searched recursively) goes into one CSV, JSON, bodyfile
   and file listing; `SourceFile` says which $MFT each row is from (Issues #109).
 - `--json` works for $Boot, $Secure:$SDS and $I30 (Issues #263).
-- $I30 JSON matches the CSV: `NameType` is the name (`DosWindows`, not `3`) and `ParentPath` is there (empty)
-  without `-m` (Issues #263, 2026.11.1).
+- JSON has the names of enum values, as the CSV does: $MFT `SiFlags` (`Hidden|System`, not `6`) and `NameType`
+  (`DosWindows`, not `3`), and $I30 `NameType`; the $I30 JSON also has `ParentPath` (empty) without `-m`
+  (Issues #263, 2026.11.1).
 - `-f $I30 -m $MFT`: a new last column, `ParentPath`, has the path of the directory each index entry is in (Issues #194).
 - New `--mno` option: with `-m`, the $MFT is only used for the paths and its CSV, JSON and bodyfile are not written
   (Issues #266, PR #63 by reece394).

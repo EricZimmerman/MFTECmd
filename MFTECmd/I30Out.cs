@@ -1,5 +1,6 @@
 ﻿using System;
 using CsvHelper;
+using MFT.Attributes;
 
 namespace MFTECmd;
 
@@ -13,8 +14,7 @@ public partial class I30Out
     
     public string FileName { get; set; }
     public string Flags { get; set; }
-    /// <summary>The name, as in the CSV (an enum would be a number in the JSON, Issues #263)</summary>
-    public string NameType { get; set; }
+    public NameTypes NameType { get; set; }
     public ulong ParentMftEntry { get; set; }
     public int ParentMftSequence { get; set; }
     

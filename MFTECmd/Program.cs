@@ -99,6 +99,29 @@ public class Program
         JsConfig<DateTime?>.SerializeFn = d => d.HasValue ? JsonDate(d.Value) : null;
     }
 
+    // JSON enums: the name, as in the CSV (Flags joined with |), not the number ServiceStack writes for [Flags] enums
+    // ($MFT SiFlags and NameType, $I30 NameType; Issues #263). A value with no name stays a number in the string.
+    internal static readonly Type[] JsonOutputTypes =
+        { typeof(MFTRecordOut), typeof(I30Out), typeof(JEntryOut), typeof(LogFileOut), typeof(SdsOut), typeof(BootOut) };
+
+    private static void ConfigureJsonEnums()
+    {
+        var use = typeof(Program).GetMethod(nameof(UseEnumName), BindingFlags.NonPublic | BindingFlags.Static);
+        foreach (var e in JsonOutputTypes.SelectMany(t => t.GetProperties())
+                     .Select(p => Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType)
+                     .Where(t => t.IsEnum).Distinct())
+        {
+            use.MakeGenericMethod(e).Invoke(null, null);
+        }
+    }
+
+    private static void UseEnumName<T>() where T : struct, Enum
+    {
+        JsConfig<T>.SerializeFn = EnumName;
+    }
+
+    internal static string EnumName<T>(T e) where T : struct, Enum => e.ToString().Replace(", ", "|");
+
     private static string JsonDate(DateTimeOffset d)
     {
         return d.UtcDateTime.ToString(JsonDateFormat, CultureInfo.InvariantCulture);
@@ -118,6 +141,7 @@ public class Program
     private static async Task<int> Main(string[] args)
     {
         ConfigureJsonDates();
+        ConfigureJsonEnums();
 
         ExceptionlessClient.Default.Startup("88KHFwswzxfnYGejAlsVDao47ySGliI6vFbQPt9C");
 
@@ -919,7 +943,7 @@ mOpt,
                 SelfMftSequence = index.MftReferenceSelf?.MftSequenceNumber,
                 FileName = index.FileInfo.FileName,
                 Flags = index.FileInfo.Flags.ToString().Replace(", ", "|"),
-                NameType = index.FileInfo.NameType.ToString(),
+                NameType = index.FileInfo.NameType,
                 ParentMftEntry = index.FileInfo.ParentMftRecord.MftEntryNumber,
                 ParentMftSequence = index.FileInfo.ParentMftRecord.MftSequenceNumber,
                 CreatedOn = index.FileInfo.CreatedOn,
