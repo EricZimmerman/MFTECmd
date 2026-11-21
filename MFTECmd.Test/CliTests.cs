@@ -505,6 +505,23 @@ public class CliTests
     }
 
     [Test]
+    public void I30JsonMatchesCsv()
+    {
+        //Issues #263: NameType was a number in the JSON (DosWindows in the CSV) and ParentPath was missing without -m
+        Run("-f", TestFiles.Generated("$I30"), "--csv", Out, "--json", Out).ExitCode.Should().Be(0);
+
+        var types = Column(OutFile("$I30_Output.csv"), "NameType");
+        var json = File.ReadAllLines(OutFile("$I30_Output.json"));
+        json.Should().HaveCount(types.Length);
+        for (var i = 0; i < json.Length; i++)
+        {
+            json[i].Should().Contain($"\"NameType\":\"{types[i]}\"");
+            json[i].Should().Contain("\"ParentPath\":\"\"");
+        }
+        types.Should().Contain("DosWindows");
+    }
+
+    [Test]
     public void SdsWithoutOutputExits1()
     {
         var (exitCode, output) = Run("-f", TestFiles.Generated("$SDS"));

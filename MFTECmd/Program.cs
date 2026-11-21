@@ -919,7 +919,7 @@ mOpt,
                 SelfMftSequence = index.MftReferenceSelf?.MftSequenceNumber,
                 FileName = index.FileInfo.FileName,
                 Flags = index.FileInfo.Flags.ToString().Replace(", ", "|"),
-                NameType = index.FileInfo.NameType,
+                NameType = index.FileInfo.NameType.ToString(),
                 ParentMftEntry = index.FileInfo.ParentMftRecord.MftEntryNumber,
                 ParentMftSequence = index.FileInfo.ParentMftRecord.MftSequenceNumber,
                 CreatedOn = index.FileInfo.CreatedOn,
@@ -930,7 +930,8 @@ mOpt,
                 LogicalSize = index.FileInfo.LogicalSize,
                 SourceFile = f,
                 //with -m: the path of the directory the entry is in (issue #194)
-                ParentPath = _mft?.GetFullParentPath(index.FileInfo.ParentMftRecord.GetKey())
+                //empty without -m, so the JSON has the field too, as for $J
+                ParentPath = _mft?.GetFullParentPath(index.FileInfo.ParentMftRecord.GetKey()) ?? string.Empty
             };
 
             Log.Verbose("{Entry}",index);

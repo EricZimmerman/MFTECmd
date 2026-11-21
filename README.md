@@ -6,7 +6,7 @@ and Volume Shadow Copies (`--vss`) are read through raw disk access.
 
 | | |
 |---|---|
-| **Version** | 2026.11.0 |
+| **Version** | 2026.11.1 |
 | **Download** | [.NET 10](https://download.ericzimmermanstools.com/net/MFTECmd.zip) (recommended) &middot; [.NET Framework 4.7.2](https://download.ericzimmermanstools.com/MFTECmd.zip) |
 | **All tools** | [ericzimmerman.github.io](https://ericzimmerman.github.io) or [Get-ZimmermanTools](https://download.ericzimmermanstools.com/Get-ZimmermanTools.zip), which downloads them all and keeps them current |
 | **Changes** | [ChangeLog](https://ericzimmerman.github.io/changelog/) |
@@ -163,6 +163,8 @@ file names (`--csvf`/`--jsonf` name the $J output).
 - New `-d` option: every $MFT under a folder (named `$MFT*`, searched recursively) goes into one CSV, JSON, bodyfile
   and file listing; `SourceFile` says which $MFT each row is from (Issues #109).
 - `--json` works for $Boot, $Secure:$SDS and $I30 (Issues #263).
+- $I30 JSON matches the CSV: `NameType` is the name (`DosWindows`, not `3`) and `ParentPath` is there (empty)
+  without `-m` (Issues #263, 2026.11.1).
 - `-f $I30 -m $MFT`: a new last column, `ParentPath`, has the path of the directory each index entry is in (Issues #194).
 - New `--mno` option: with `-m`, the $MFT is only used for the paths and its CSV, JSON and bodyfile are not written
   (Issues #266, PR #63 by reece394).

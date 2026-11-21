@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-MFTECmd is a .NET console tool, part of Eric Zimmerman's DFIR tool suite, that parses NTFS metadata files ($MFT, $J, $LogFile, $Boot, $Secure:$SDS, $I30) and exports them to CSV, JSON and bodyfile (bodyfile is $MFT only). Every type writes CSV and JSON (Issues #263: $Boot, $SDS and $I30 had CSV only). The parsers are NuGet packages from the MFT repo (EricZimmerman/MFT): `MFT`, `Usn`, `MFT.LogFile` (namespace `LogFile`), `Boot`, `Secure`, `I30`. A fix to how a structure is parsed belongs there, followed by a package bump in `MFTECmd/MFTECmd.csproj`. Input may be corrupt or hostile.
+MFTECmd is a .NET console tool, part of Eric Zimmerman's DFIR tool suite, that parses NTFS metadata files ($MFT, $J, $LogFile, $Boot, $Secure:$SDS, $I30) and exports them to CSV, JSON and bodyfile (bodyfile is $MFT only). Every type writes CSV and JSON (Issues #263: $Boot, $SDS and $I30 had CSV only). The JSON has the same values as the CSV: ServiceStack writes `[Flags]` enums as numbers, so `I30Out.NameType` is a string, and `ParentPath` is empty rather than null without `-m` (null fields are left out of the JSON). The $MFT JSON still has `SiFlags`/`NameType` as numbers, as it always has. The parsers are NuGet packages from the MFT repo (EricZimmerman/MFT): `MFT`, `Usn`, `MFT.LogFile` (namespace `LogFile`), `Boot`, `Secure`, `I30`. A fix to how a structure is parsed belongs there, followed by a package bump in `MFTECmd/MFTECmd.csproj`. Input may be corrupt or hostile.
 
 ## Commands
 
